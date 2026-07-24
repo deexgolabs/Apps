@@ -237,9 +237,9 @@ export default function AppEditorPage({ params }: PageProps) {
 
                 <ImageUploadField label="Logo" value={logoUrl} onChange={setLogoUrl} />
 
-                <ImageUploadField label="Ícone do app" value={iconUrl} onChange={setIconUrl} />
+                <ImageUploadField label="Ícone do app" value={iconUrl} onChange={setIconUrl} hint="Recomendado: 1024×1024px" />
 
-                <ImageUploadField label="Imagem de abertura (splash)" value={splashUrl} onChange={setSplashUrl} />
+                <ImageUploadField label="Imagem de abertura (splash)" value={splashUrl} onChange={setSplashUrl} hint="Recomendado: 2732×2732px" />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -8,9 +8,10 @@ interface ImageUploadFieldProps {
   label: string
   value: string
   onChange: (url: string) => void
+  hint?: string
 }
 
-export default function ImageUploadField({ label, value, onChange }: ImageUploadFieldProps) {
+export default function ImageUploadField({ label, value, onChange, hint }: ImageUploadFieldProps) {
   const [uploading, setUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -43,6 +44,7 @@ export default function ImageUploadField({ label, value, onChange }: ImageUpload
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+      {hint && <p className="text-xs text-gray-400 -mt-1.5 mb-2">{hint}</p>}
       {value ? (
         <div className="flex items-center gap-3">
           <img src={value} alt="" className="w-16 h-16 object-cover rounded-lg border border-gray-300" />

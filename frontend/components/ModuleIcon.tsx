@@ -4,7 +4,7 @@ import { DEFAULT_MODULE_ICON, MODULE_VECTOR_ICONS, resolveIconName } from '@/lib
 
 interface ModuleIconProps {
   moduleName: string
-  config?: { icon?: string; icon_name?: string } | undefined
+  config?: { icon?: string; icon_name?: string; icon_background_url?: string } | undefined
   color?: string
   size?: number
   badge?: boolean
@@ -19,6 +19,7 @@ export default function ModuleIcon({ moduleName, config, color = '#4F46E5', size
   const VectorIcon = config?.icon_name ? resolveIconName(config.icon_name) : undefined
   const emoji = !VectorIcon ? config?.icon : undefined
   const FallbackIcon = MODULE_VECTOR_ICONS[moduleName] || DEFAULT_MODULE_ICON
+  const backgroundUrl = config?.icon_background_url
 
   const content = VectorIcon ? (
     <VectorIcon size={size} color={color} strokeWidth={2} />
@@ -32,10 +33,15 @@ export default function ModuleIcon({ moduleName, config, color = '#4F46E5', size
 
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-full shrink-0 ${className}`}
-      style={{ backgroundColor: `${color}1A`, width: size * 2, height: size * 2 }}
+      className={`relative inline-flex items-center justify-center rounded-full shrink-0 overflow-hidden ${className}`}
+      style={{ backgroundColor: backgroundUrl ? undefined : `${color}1A`, width: size * 2, height: size * 2 }}
     >
-      {content}
+      {backgroundUrl && (
+        <img src={backgroundUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      <span className={backgroundUrl ? 'relative bg-white/70 rounded-full p-0.5 flex items-center justify-center' : ''}>
+        {content}
+      </span>
     </span>
   )
 }

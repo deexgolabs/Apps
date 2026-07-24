@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/store/useAppStore'
 import api from '@/lib/api'
 import PhoneFrame from '@/components/PhoneFrame'
+import PlatformToggle from '@/components/PlatformToggle'
 import ImageUploadField from '@/components/ImageUploadField'
 import ModuleIcon from '@/components/ModuleIcon'
 import type { Module } from '@/types'
@@ -45,6 +46,7 @@ export default function NewAppPage() {
   const [secondaryColor, setSecondaryColor] = useState('#10B981')
   const [logoUrl, setLogoUrl] = useState('')
   const [iconUrl, setIconUrl] = useState('')
+  const [platform, setPlatform] = useState<'android' | 'ios'>('android')
   const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(false)
   const router = useRouter()
@@ -202,14 +204,15 @@ export default function NewAppPage() {
               </div>
             </div>
             <ImageUploadField label="Logo (opcional)" value={logoUrl} onChange={setLogoUrl} />
-            <ImageUploadField label="Ícone do app (opcional)" value={iconUrl} onChange={setIconUrl} />
+            <ImageUploadField label="Ícone do app (opcional)" value={iconUrl} onChange={setIconUrl} hint="Recomendado: 1024×1024px" />
           </div>
         )}
 
         {step === 3 && (
           <div>
             <p className="text-sm font-medium text-gray-700 mb-4 text-center">Confira como seu app vai ficar</p>
-            <PhoneFrame>
+            <PlatformToggle value={platform} onChange={setPlatform} />
+            <PhoneFrame platform={platform}>
               <div className="h-10 flex items-center justify-between px-3 shrink-0" style={{ backgroundColor: primaryColor }}>
                 <span className="text-white text-lg leading-none">☰</span>
                 {logoUrl ? (

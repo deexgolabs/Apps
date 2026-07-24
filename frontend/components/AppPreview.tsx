@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import AppRuntime from '@/components/AppRuntime'
 import PhoneFrame from '@/components/PhoneFrame'
+import PlatformToggle from '@/components/PlatformToggle'
 import type { Module } from '@/types'
 
 interface AppPreviewProps {
@@ -21,6 +23,8 @@ interface AppPreviewProps {
 }
 
 export default function AppPreview(props: AppPreviewProps) {
+  const [platform, setPlatform] = useState<'android' | 'ios'>('android')
+
   return (
     <div>
       <p className="text-sm font-medium text-gray-700 mb-1">Preview do aplicativo</p>
@@ -29,7 +33,8 @@ export default function AppPreview(props: AppPreviewProps) {
           Toque no ☰ pra reordenar ou configurar os módulos
         </p>
       )}
-      <PhoneFrame>
+      <PlatformToggle value={platform} onChange={setPlatform} />
+      <PhoneFrame platform={platform}>
         <AppRuntime mode="owner" {...props} />
       </PhoneFrame>
     </div>

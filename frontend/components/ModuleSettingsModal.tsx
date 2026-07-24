@@ -183,6 +183,15 @@ export default function ModuleSettingsModal({
                 ))}
               </div>
             )}
+
+            <div className="mt-3">
+              <ImageUploadField
+                label="Imagem de fundo do ícone (opcional)"
+                value={values.icon_background_url || ''}
+                onChange={(url) => setValues({ ...values, icon_background_url: url })}
+                hint="Recomendado: 400×400px"
+              />
+            </div>
           </div>
 
           <hr className="border-gray-200" />
