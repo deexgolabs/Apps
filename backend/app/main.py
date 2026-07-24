@@ -4,13 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.config import settings
-from app.models import Base
-from app.database import engine
 from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth
 from app.seed import seed_modules
 
-# Criar tabelas
-Base.metadata.create_all(bind=engine)
+# Schema do banco é responsabilidade do Alembic (`alembic upgrade head`), não do app subindo.
 
 # Popular módulos padrão (idempotente)
 seed_modules()
