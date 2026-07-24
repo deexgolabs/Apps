@@ -1,18 +1,19 @@
 import json
 import logging
 from datetime import datetime, timezone
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pywebpush import webpush, WebPushException
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.constants import PLAN_LIMITS
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import App, PushSendLog, PushSubscription, User
+from app.plan_limits import get_plan_limits
 from app.public_utils import get_published_app
-from app.schemas import PushSubscriptionCreate, PushSendRequest
+from app.schemas import PushSubscriptionCreate, PushSendRequest, PushSendLogResponse
 
 router = APIRouter(prefix="/api/apps/{app_id}", tags=["push"])
 logger = logging.getLogger("app.push")
@@ -66,7 +67,7 @@ async def send_push(
     if not settings.vapid_private_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Push notifications não configuradas nesta instância")
 
-    limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["push_sends_per_month"]
+    limit = get_plan_limits(current_user.plan, db)["push_sends_per_month"]
     month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     sent_this_month = db.query(PushSendLog).filter(
         PushSendLog.app_id == app_id, PushSendLog.sent_at >= month_start
@@ -100,6 +101,22 @@ async def send_push(
             else:
                 logger.warning("Falha ao enviar push para %s: %s", sub.endpoint, exc)
 
-    db.add(PushSendLog(app_id=app_id))
+    db.add(PushSendLog(app_id=app_id, title=payload.title, body=payload.body))
     db.commit()
     return {"sent": sent, "failed": failed, "total": len(subscriptions)}
+
+
+@router.get("/push/history", response_model=List[PushSendLogResponse])
+async def get_push_history(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_app(app_id, db, current_user)
+    return (
+        db.query(PushSendLog)
+        .filter(PushSendLog.app_id == app_id)
+        .order_by(PushSendLog.sent_at.desc())
+        .limit(50)
+        .all()
+    )

@@ -11,6 +11,9 @@ import AppPreview from '@/components/AppPreview'
 import AddModulePanel from '@/components/AddModulePanel'
 import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
+import OrdersList from '@/components/OrdersList'
+import PushComposer from '@/components/PushComposer'
+import PushHistory from '@/components/PushHistory'
 import ImageUploadField from '@/components/ImageUploadField'
 import type { App, Module } from '@/types'
 import toast from 'react-hot-toast'
@@ -27,12 +30,13 @@ const FONT_OPTIONS = [
   { value: "'Trebuchet MS', sans-serif", label: 'Trebuchet MS' },
 ]
 
-type Tab = 'geral' | 'marca' | 'modulos' | 'publicar'
+type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'notificacoes' | 'publicar'
 
-const TABS: { id: Tab; label: string }[] = [
+const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'geral', label: 'Geral' },
   { id: 'marca', label: 'Marca' },
   { id: 'modulos', label: 'Módulos' },
+  { id: 'pedidos', label: 'Pedidos' },
   { id: 'publicar', label: 'Publicar' },
 ]
 
@@ -151,6 +155,10 @@ export default function AppEditorPage({ params }: PageProps) {
       toast.error('Erro ao excluir aplicativo')
     }
   }
+
+  const TABS: { id: Tab; label: string }[] = activeModules.includes('push_notifications')
+    ? [...BASE_TABS.slice(0, 4), { id: 'notificacoes', label: 'Notificações' }, ...BASE_TABS.slice(4)]
+    : BASE_TABS
 
   const checklistItems = [
     { label: 'Definir logo ou ícone do app', done: !!(logoUrl || iconUrl) },
@@ -325,6 +333,18 @@ export default function AppEditorPage({ params }: PageProps) {
                 primaryColor={primaryColor}
                 onAdd={(name) => setActiveModules([...activeModules, name])}
               />
+            )}
+
+            {activeTab === 'pedidos' && (
+              <OrdersList appId={id} />
+            )}
+
+            {activeTab === 'notificacoes' && (
+              <div className="space-y-6">
+                <PushComposer appId={id} />
+                <hr className="border-gray-200" />
+                <PushHistory appId={id} />
+              </div>
             )}
 
             {activeTab === 'publicar' && (

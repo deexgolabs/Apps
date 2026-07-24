@@ -19,7 +19,15 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import api, { publicApi } from '@/lib/api'
 import Skeleton from '@/components/Skeleton'
-import { FIXED_FORM_MODULES, FORM_MODULE_FIELDS, LIST_MODULES, PAYMENT_GATEWAY_MODULES } from '@/lib/moduleFields'
+import {
+  FIXED_FORM_MODULES,
+  FORM_MODULE_FIELDS,
+  LIST_MODULES,
+  ORDER_MODULES,
+  PAGAMENTO_ENTREGA_CUSTOMER_FIELDS,
+  PAYMENT_GATEWAY_MODULES,
+  parseCustomFields,
+} from '@/lib/moduleFields'
 import ModuleIcon from '@/components/ModuleIcon'
 import type { Module, ModuleCategory, ModuleItem } from '@/types'
 import toast from 'react-hot-toast'
@@ -391,10 +399,14 @@ function FormModuleContent({ appId, moduleName }: { appId: string; moduleName: s
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
 
+  const isOrder = ORDER_MODULES.includes(moduleName)
+
   const handleSubmit = async () => {
     setSending(true)
     try {
-      await publicApi.post(`/api/apps/${appId}/modules/${moduleName}/submissions`, { data: values })
+      const endpoint = isOrder ? 'orders' : 'submissions'
+      const headers = isOrder ? endUserAuthHeader(appId) : undefined
+      await publicApi.post(`/api/apps/${appId}/modules/${moduleName}/${endpoint}`, { data: values }, { headers })
       setSent(true)
       setValues({})
     } catch (error) {
@@ -407,7 +419,9 @@ function FormModuleContent({ appId, moduleName }: { appId: string; moduleName: s
   if (sent) {
     return (
       <div className="text-center mt-8">
-        <p className="text-sm text-gray-700 font-medium">Enviado! Obrigado.</p>
+        <p className="text-sm text-gray-700 font-medium">
+          {isOrder ? 'Pedido enviado! Obrigado.' : 'Enviado! Obrigado.'}
+        </p>
         <button
           type="button"
           onClick={() => setSent(false)}
@@ -462,7 +476,7 @@ function DynamicFormModuleContent({
   moduleName: string
   settings: Record<string, any> | undefined
 }) {
-  const campos = (settings?.campos || '').split('\n').map((s: string) => s.trim()).filter(Boolean)
+  const campos = parseCustomFields(settings?.campos || '')
   const [values, setValues] = useState<Record<string, string>>({})
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
@@ -503,22 +517,24 @@ function DynamicFormModuleContent({
     )
   }
 
+  const missingRequired = campos.some((field) => field.required && !values[field.key]?.trim())
+
   return (
     <div className="space-y-2">
-      {campos.map((label: string) => (
+      {campos.map((field) => (
         <input
-          key={label}
-          type="text"
-          value={values[label] || ''}
-          onChange={(e) => setValues({ ...values, [label]: e.target.value })}
-          placeholder={label}
+          key={field.key}
+          type={field.type === 'numero' ? 'number' : field.type === 'data' ? 'date' : 'text'}
+          value={values[field.key] || ''}
+          onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+          placeholder={field.label + (field.required ? ' *' : '')}
           className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
         />
       ))}
       <button
         type="button"
         onClick={handleSubmit}
-        disabled={sending}
+        disabled={sending || missingRequired}
         className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
       >
         {sending ? 'Enviando...' : 'Enviar'}
@@ -576,6 +592,59 @@ function endUserSessionKey(appId: string) {
   return `end_user_session_${appId}`
 }
 
+// Se o cliente final estiver logado (login_cadastro), anexa o token na criação
+// do pedido pra ele aparecer em "Meus pedidos" — opcional, formulário funciona
+// igual pra visitante sem conta.
+function endUserAuthHeader(appId: string): Record<string, string> {
+  const saved = localStorage.getItem(endUserSessionKey(appId))
+  if (!saved) return {}
+  try {
+    const { token } = JSON.parse(saved)
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
+const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pendente',
+  confirmed: 'Confirmado',
+  preparing: 'Preparando',
+  completed: 'Concluído',
+  cancelled: 'Cancelado',
+}
+
+function MyOrders({ appId, token }: { appId: string; token: string }) {
+  const [orders, setOrders] = useState<{ id: number; module_name: string; status: string; created_at: string }[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    publicApi
+      .get(`/api/apps/${appId}/my-orders`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((response) => setOrders(response.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [appId, token])
+
+  if (loading) return <p className="text-xs text-gray-400">Carregando pedidos...</p>
+
+  if (orders.length === 0) return null
+
+  return (
+    <div className="text-left space-y-2 pt-2 border-t border-gray-200">
+      <p className="text-sm font-medium text-gray-700">Meus pedidos</p>
+      {orders.map((order) => (
+        <div key={order.id} className="border border-gray-200 rounded-lg p-2 text-xs flex items-center justify-between">
+          <span className="text-gray-600">
+            {order.module_name} — {new Date(order.created_at).toLocaleDateString('pt-BR')}
+          </span>
+          <span className="font-medium text-gray-900">{ORDER_STATUS_LABELS[order.status] || order.status}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function EndUserAuthWidget({ appId }: { appId: string }) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [fullName, setFullName] = useState('')
@@ -583,6 +652,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [loggedInUser, setLoggedInUser] = useState<{ full_name: string } | null>(null)
+  const [endUserToken, setEndUserToken] = useState<string | null>(null)
 
   // Restaura a sessão salva no localStorage, e trata o redirect de volta do
   // login via Facebook (?fb_token=... na URL) buscando os dados do usuário.
@@ -601,6 +671,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
             JSON.stringify({ token: fbToken, user: response.data })
           )
           setLoggedInUser(response.data)
+          setEndUserToken(fbToken)
           toast.success('Login com Facebook realizado!')
           params.delete('fb_token')
           const newSearch = params.toString()
@@ -613,8 +684,9 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
     const saved = localStorage.getItem(endUserSessionKey(appId))
     if (saved) {
       try {
-        const { user } = JSON.parse(saved)
+        const { user, token } = JSON.parse(saved)
         setLoggedInUser(user)
+        setEndUserToken(token)
       } catch {
         localStorage.removeItem(endUserSessionKey(appId))
       }
@@ -633,6 +705,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
         JSON.stringify({ token: response.data.access_token, user: response.data.user })
       )
       setLoggedInUser(response.data.user)
+      setEndUserToken(response.data.access_token)
       toast.success(mode === 'register' ? 'Cadastro realizado!' : 'Login realizado!')
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Erro ao autenticar')
@@ -659,6 +732,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
           onClick={() => {
             localStorage.removeItem(endUserSessionKey(appId))
             setLoggedInUser(null)
+            setEndUserToken(null)
             setEmail('')
             setPassword('')
             setFullName('')
@@ -667,6 +741,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
         >
           Sair
         </button>
+        {endUserToken && <MyOrders appId={appId} token={endUserToken} />}
       </div>
     )
   }
@@ -757,6 +832,9 @@ function PaymentWidget({
 }) {
   const [loading, setLoading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
+  const [customerValues, setCustomerValues] = useState<Record<string, string>>({})
+  const [orderId, setOrderId] = useState<number | null>(null)
+  const [orderStatus, setOrderStatus] = useState<string | null>(null)
   const isGateway = PAYMENT_GATEWAY_MODULES.includes(moduleName)
 
   if (!settings?.titulo) {
@@ -785,10 +863,13 @@ function PaymentWidget({
   const handlePayEntrega = async () => {
     setLoading(true)
     try {
-      await publicApi.post(`/api/apps/${appId}/modules/${moduleName}/submissions`, {
-        data: { titulo: settings.titulo },
-      })
+      await publicApi.post(
+        `/api/apps/${appId}/modules/${moduleName}/orders`,
+        { data: { titulo: settings.titulo, ...customerValues } },
+        { headers: endUserAuthHeader(appId) }
+      )
       setConfirmed(true)
+      setCustomerValues({})
     } catch (error) {
       toast.error('Erro ao confirmar pedido')
     } finally {
@@ -803,6 +884,8 @@ function PaymentWidget({
       const url = response.data.checkout_url
       if (url) {
         window.open(url, '_blank', 'noopener,noreferrer')
+        setOrderId(response.data.order_id)
+        setOrderStatus('pending')
       } else {
         toast.error('A gateway não retornou um link de pagamento')
       }
@@ -811,6 +894,59 @@ function PaymentWidget({
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleConfirmPayment = async () => {
+    if (!orderId) return
+    setLoading(true)
+    try {
+      const response = await publicApi.post(
+        `/api/apps/${appId}/modules/${moduleName}/orders/${orderId}/confirm`
+      )
+      setOrderStatus(response.data.status)
+      if (response.data.status === 'confirmed') {
+        toast.success('Pagamento confirmado!')
+      } else {
+        toast.error('Ainda não identificamos o pagamento. Tente novamente após concluir no checkout.')
+      }
+    } catch (error) {
+      toast.error('Erro ao confirmar pagamento')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (isGateway && orderId) {
+    return (
+      <div className="text-center space-y-3">
+        <h3 className="font-semibold text-gray-900">{settings.titulo}</h3>
+        {orderStatus === 'confirmed' ? (
+          <p className="text-sm text-gray-700 font-medium">Pagamento confirmado!</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-600">Pedido criado — confirme depois de pagar no checkout.</p>
+            <button
+              type="button"
+              onClick={handleConfirmPayment}
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              {loading ? 'Verificando...' : 'Já paguei, confirmar'}
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setOrderId(null)
+            setOrderStatus(null)
+          }}
+          className="text-xs text-indigo-600 hover:text-indigo-700"
+        >
+          Fazer outro pedido
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -822,10 +958,36 @@ function PaymentWidget({
       {!isGateway && settings.instrucoes && (
         <p className="text-sm text-gray-600">{settings.instrucoes}</p>
       )}
+      {!isGateway && (
+        <div className="space-y-2 text-left">
+          {PAGAMENTO_ENTREGA_CUSTOMER_FIELDS.map((field) =>
+            field.type === 'textarea' ? (
+              <textarea
+                key={field.key}
+                value={customerValues[field.key] || ''}
+                onChange={(e) => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
+                placeholder={field.label}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+            ) : (
+              <input
+                key={field.key}
+                type="text"
+                value={customerValues[field.key] || ''}
+                onChange={(e) => setCustomerValues({ ...customerValues, [field.key]: e.target.value })}
+                placeholder={field.label}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+            )
+          )}
+        </div>
+      )}
       <button
         type="button"
         onClick={isGateway ? handleCheckout : handlePayEntrega}
-        disabled={loading}
+        disabled={
+          loading || (!isGateway && PAGAMENTO_ENTREGA_CUSTOMER_FIELDS.some((f) => !customerValues[f.key]?.trim()))
+        }
         className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
       >
         {loading ? 'Aguarde...' : isGateway ? `Pagar com ${GATEWAY_LABELS[moduleName]}` : 'Confirmar Pedido'}

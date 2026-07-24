@@ -22,9 +22,35 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="session", autouse=True)
 def _setup_database():
-    from app.models import Base
+    from app.constants import PLAN_LIMITS, PLAN_PRICES, SEED_MODULES
+    from app.models import Base, Module, PlanConfig
 
     Base.metadata.create_all(bind=engine)
+
+    # Popula o catálogo de módulos e planos no banco de teste — normalmente isso
+    # acontece via seed_modules()/seed_plan_configs() ao importar app.main, mas
+    # essas funções sempre usam o banco de DEV (SessionLocal fixo), não o de
+    # teste. Sem isso, rotas que consultam Module (ex: module-config, checkout)
+    # dão 404, e a tabela PlanConfig fica vazia (get_plan_limits cai no fallback
+    # PLAN_LIMITS fixo, mas os testes de admin/planos precisam das linhas de verdade).
+    session = TestingSessionLocal()
+    try:
+        for data in SEED_MODULES:
+            session.add(Module(**data))
+        for plan_name, limits in PLAN_LIMITS.items():
+            session.add(PlanConfig(
+                plan_name=plan_name,
+                price=PLAN_PRICES.get(plan_name, 0),
+                max_apps=limits["apps"],
+                max_modules=limits["modules"],
+                max_items=limits["items"],
+                max_categories=limits["categories"],
+                max_push_sends_per_month=limits["push_sends_per_month"],
+            ))
+        session.commit()
+    finally:
+        session.close()
+
     yield
     Base.metadata.drop_all(bind=engine)
 

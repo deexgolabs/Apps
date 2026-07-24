@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from app.utils import verify_token, decode_token
 from app.models import User, AppUser
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
@@ -69,3 +72,23 @@ async def get_current_end_user(
         )
 
     return end_user
+
+
+async def get_optional_end_user(
+    app_id: int,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
+    db: Session = Depends(get_db)
+) -> Optional[AppUser]:
+    """Como get_current_end_user, mas devolve None em vez de 401 quando não há
+    token (ou é inválido) — usado em rotas públicas onde login é opcional."""
+    if not credentials:
+        return None
+
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("type") != "end_user" or payload.get("app_id") != app_id:
+        return None
+
+    return db.query(AppUser).filter(
+        AppUser.id == payload.get("end_user_id"),
+        AppUser.app_id == app_id
+    ).first()

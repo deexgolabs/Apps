@@ -8,8 +8,8 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.rate_limit import limiter
-from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth
-from app.seed import seed_modules
+from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth, orders
+from app.seed import seed_modules, seed_plan_configs
 
 # Sem DSN (padrão), sentry_sdk.init vira um no-op — nada é enviado nem
 # processado. Defina SENTRY_DSN no .env pra ativar de verdade.
@@ -18,8 +18,9 @@ if settings.sentry_dsn:
 
 # Schema do banco é responsabilidade do Alembic (`alembic upgrade head`), não do app subindo.
 
-# Popular módulos padrão (idempotente)
+# Popular módulos e planos padrão (idempotente)
 seed_modules()
+seed_plan_configs()
 
 # Criar app
 app = FastAPI(
@@ -57,6 +58,7 @@ app.include_router(push.router)
 app.include_router(uploads.router)
 app.include_router(mercado_livre.router)
 app.include_router(oauth.router)
+app.include_router(orders.router)
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)

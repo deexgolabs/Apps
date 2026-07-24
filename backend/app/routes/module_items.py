@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models import App, ModuleCategory, ModuleItem, User
 from app.schemas import CategoryCreate, CategoryResponse, ItemCreate, ItemUpdate, ItemResponse
 from app.dependencies import get_current_user
-from app.constants import PLAN_LIMITS
+from app.plan_limits import get_plan_limits
 
 router = APIRouter(prefix="/api/apps", tags=["module-items"])
 
@@ -46,7 +46,7 @@ async def create_category(
 ):
     _get_owned_app(app_id, db, current_user)
 
-    limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["categories"]
+    limit = get_plan_limits(current_user.plan, db)["categories"]
     current_count = db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).count()
     if current_count >= limit:
         raise HTTPException(
@@ -113,7 +113,7 @@ async def create_item(
 ):
     _get_owned_app(app_id, db, current_user)
 
-    limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["items"]
+    limit = get_plan_limits(current_user.plan, db)["items"]
     current_count = db.query(ModuleItem).filter(ModuleItem.app_id == app_id).count()
     if current_count >= limit:
         raise HTTPException(

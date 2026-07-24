@@ -113,7 +113,55 @@ class PushSendLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    title = Column(String, nullable=True)
+    body = Column(String, nullable=True)
     sent_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class Order(Base):
+    """Pedido gerado por um módulo de formulário/pagamento (delivery, cotação,
+    pagamento na entrega, checkout via gateway) — diferente de FormSubmission,
+    que é só contato/avaliação sem workflow de status."""
+    __tablename__ = "orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    module_name = Column(String, nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=True)
+    data = Column(JSON, default=dict)
+    amount = Column(Float, nullable=True)
+    payment_method = Column(String, nullable=True)
+    payment_reference = Column(String, nullable=True)
+    status = Column(String, default="pending")  # pending, confirmed, preparing, completed, cancelled
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class PlanConfig(Base):
+    """Limites e preço de cada plano, editáveis pelo admin — substitui os
+    valores fixos de PLAN_LIMITS/PLAN_PRICES (que continuam servindo de seed
+    inicial e de fallback caso a linha do plano não exista por algum motivo)."""
+    __tablename__ = "plan_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plan_name = Column(String, unique=True, index=True, nullable=False)
+    price = Column(Float, default=0)
+    max_apps = Column(Integer, default=1)
+    max_modules = Column(Integer, default=5)
+    max_items = Column(Integer, default=10)
+    max_categories = Column(Integer, default=5)
+    max_push_sends_per_month = Column(Integer, default=0)
+
+
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    action = Column(String, nullable=False)
+    target = Column(String, nullable=False)
+    details = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
 class ModuleItem(Base):

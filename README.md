@@ -22,8 +22,13 @@ Plataforma de criação de aplicativos sem código (estilo [Web Robot Apps](http
 - **Upload de imagem real**: logo, ícone, splash, imagem de fundo de ícone de módulo e imagens de item vão pro disco do backend (`/uploads`), servidos como arquivo estático — com dica de tamanho recomendado nos campos que a WRA documenta.
 - **Duplicar app** e checklist de progresso (logo/ícone, módulo configurado, publicado) na aba Geral do editor.
 - **Preview Android/iOS** alternável, fonte customizável por app, e ícones vetoriais ([lucide-react](https://lucide.dev)) por módulo (com opção de emoji ou imagem de fundo customizados).
+- **Pedidos**: formulário de delivery, cotação e pagamento na entrega geram um `Order` de verdade (com status `pending`/`confirmed`/`preparing`/`completed`/`cancelled`), reunidos numa aba "Pedidos" no editor com controle de status; se o cliente final estiver logado (`login_cadastro`), o pedido some pra conta dele em "Meus pedidos".
+- **Verificação real de pagamento**: checkout via Mercado Pago/PayPal/PagSeguro cria um `Order` vinculado à cobrança na gateway (via `external_reference`/id do pedido na gateway) e não finge sucesso — o cliente confirma depois de pagar, e o backend consulta a gateway de verdade antes de marcar como `confirmed`.
+- **Notificações**: aba dedicada no editor (quando o módulo está ativo) com envio + histórico dos títulos/mensagens já enviados.
+- **Formulário de contato personalizado**: campos aceitam tipo (`Rótulo:numero`, `Rótulo:data`) e obrigatoriedade (`Rótulo*`), com respostas recebidas visíveis no ⚙ do módulo.
+- **Administração**: limites e preço de cada plano (`free`/`pro`/`business`) editáveis pelo painel admin (não são mais fixos em código), detalhe/suspensão/exclusão de apps de qualquer usuário, log de auditoria das ações do admin, e cards de receita mensal estimada (MRR) e apps publicados.
 - Rate limiting (`slowapi`) nas rotas públicas de autenticação; monitoramento de erro (Sentry) preparado e inativo até receber uma DSN.
-- Suíte de testes (`pytest`) cobrindo apps, auth, admin, billing, push, público.
+- Suíte de testes (`pytest`) cobrindo apps, auth, admin, billing, push, pedidos, pagamentos, público.
 
 ## Estrutura
 
@@ -34,14 +39,16 @@ plataforma-apps/
 │   │   ├── main.py              # FastAPI app, CORS, seed dos módulos, monta /uploads
 │   │   ├── config.py             # Settings (variáveis de ambiente)
 │   │   ├── database.py           # Engine/Session SQLAlchemy
-│   │   ├── models.py             # User, App, Module, AppConfig, AppUser, ModuleItem, FormSubmission...
+│   │   ├── models.py             # User, App, Module, AppConfig, AppUser, ModuleItem, Order,
+│   │   │                          #   FormSubmission, PlanConfig, AdminAuditLog...
 │   │   ├── schemas.py            # Pydantic schemas
-│   │   ├── constants.py          # PLAN_LIMITS, APP_TEMPLATES, catálogo de módulos (seed)
-│   │   ├── seed.py               # popula módulos padrão (idempotente)
-│   │   ├── payment_gateways.py   # Mercado Pago/PayPal/PagSeguro (compartilhado entre módulo de pagamento e billing)
-│   │   ├── email_utils.py        # envio de e-mail (verificação, reset de senha)
+│   │   ├── constants.py          # PLAN_LIMITS/PLAN_PRICES (seed inicial), APP_TEMPLATES, catálogo de módulos
+│   │   ├── plan_limits.py        # get_plan_limits/get_plan_price — lê de PlanConfig (editável), cai pro constants.py se faltar
+│   │   ├── seed.py               # popula módulos e planos padrão (idempotente)
+│   │   ├── payment_gateways.py   # Mercado Pago/PayPal/PagSeguro — checkout + verify_* (consulta status real na gateway)
+│   │   ├── email_utils.py        # envio de e-mail (verificação, reset de senha, novo pedido)
 │   │   └── routes/               # auth, users, apps, modules, module_config, module_items,
-│   │                              #   submissions, end_users, oauth (Facebook), payments,
+│   │                              #   submissions, orders, end_users, oauth (Facebook), payments,
 │   │                              #   mercado_livre, public, admin, billing, push, uploads
 │   ├── alembic/                  # migrações versionadas do schema (ver "Migrações" abaixo)
 │   ├── tests/
@@ -58,6 +65,8 @@ plataforma-apps/
 │   │   ├── AddModulePanel.tsx          # tela de adicionar módulo, agrupada por categoria
 │   │   ├── ModuleSettingsModal.tsx     # configurar ícone/nome/campos de cada módulo
 │   │   ├── ItemsManager.tsx            # itens/categorias dos módulos de lista (cardápio, catálogo...)
+│   │   ├── OrdersList.tsx              # pedidos de um módulo (ou de todos, na aba Pedidos) com status editável
+│   │   ├── PushHistory.tsx             # histórico de notificações enviadas
 │   │   └── PhoneFrame.tsx              # moldura de celular compartilhada
 │   ├── lib/moduleFields.ts             # registro de campos e ícones por módulo
 │   └── store/                          # useAuthStore, useAppStore (Zustand)

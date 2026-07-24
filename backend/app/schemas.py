@@ -81,6 +81,59 @@ class AdminAppResponse(BaseModel):
         from_attributes = True
 
 
+class AdminAppDetailResponse(AdminAppResponse):
+    description: Optional[str] = None
+    config: dict
+    modules: list
+    updated_at: datetime
+
+
+class AdminAppStatusUpdate(BaseModel):
+    status: str  # published | draft | suspended
+
+
+class PlanConfigResponse(BaseModel):
+    plan_name: str
+    price: float
+    max_apps: int
+    max_modules: int
+    max_items: int
+    max_categories: int
+    max_push_sends_per_month: int
+
+    class Config:
+        from_attributes = True
+
+
+class PlanConfigUpdate(BaseModel):
+    price: Optional[float] = None
+    max_apps: Optional[int] = None
+    max_modules: Optional[int] = None
+    max_items: Optional[int] = None
+    max_categories: Optional[int] = None
+    max_push_sends_per_month: Optional[int] = None
+
+
+class AdminAuditLogResponse(BaseModel):
+    id: int
+    admin_id: int
+    admin_email: str
+    action: str
+    target: str
+    details: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminStatsResponse(BaseModel):
+    mrr: float
+    published_apps: int
+    total_apps: int
+    users_by_plan: dict
+
+
 # ===== BILLING SCHEMAS =====
 
 
@@ -109,6 +162,16 @@ class PushSubscriptionCreate(BaseModel):
 class PushSendRequest(BaseModel):
     title: str
     body: str
+
+
+class PushSendLogResponse(BaseModel):
+    id: int
+    title: Optional[str] = None
+    body: Optional[str] = None
+    sent_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 # ===== APP SCHEMAS =====
@@ -216,6 +279,37 @@ class SubmissionResponse(BaseModel):
     module_name: str
     data: dict
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ===== ORDER SCHEMAS =====
+
+
+class OrderCreate(BaseModel):
+    data: dict
+    amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    payment_reference: Optional[str] = None
+
+
+class OrderUpdate(BaseModel):
+    status: str
+
+
+class OrderResponse(BaseModel):
+    id: int
+    app_id: int
+    module_name: str
+    end_user_id: Optional[int] = None
+    data: dict
+    amount: Optional[float] = None
+    payment_method: Optional[str] = None
+    payment_reference: Optional[str] = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

@@ -6,6 +6,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.payment_gateways import checkout_mercado_pago, checkout_paypal, checkout_pagseguro
+from app.plan_limits import get_plan_price
 from app.schemas import BillingCheckoutRequest, BillingConfirmRequest
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
@@ -14,12 +15,13 @@ router = APIRouter(prefix="/api/billing", tags=["billing"])
 @router.post("/checkout")
 async def create_billing_checkout(
     payload: BillingCheckoutRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if payload.plan not in PLAN_PRICES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plano inválido")
 
-    valor = PLAN_PRICES[payload.plan]
+    valor = get_plan_price(payload.plan, db)
     titulo = f"Upgrade para o plano {payload.plan}"
 
     if payload.gateway == "mercado_pago":

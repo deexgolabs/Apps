@@ -7,7 +7,8 @@ from app.database import get_db
 from app.models import App, AppConfig, ModuleCategory, ModuleItem, PushSendLog, User
 from app.schemas import AppCreate, AppResponse, AppUpdate
 from app.dependencies import get_current_user
-from app.constants import PLAN_LIMITS, APP_TEMPLATES
+from app.constants import APP_TEMPLATES
+from app.plan_limits import get_plan_limits
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 
@@ -29,7 +30,7 @@ async def create_app(
     current_user: User = Depends(get_current_user)
 ):
     """Cria novo app, respeitando o limite de apps do plano do usuário"""
-    limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["apps"]
+    limit = get_plan_limits(current_user.plan, db)["apps"]
     if limit is not None:
         current_count = db.query(App).filter(App.user_id == current_user.id).count()
         if current_count >= limit:
@@ -39,7 +40,7 @@ async def create_app(
             )
 
     template = APP_TEMPLATES.get(app_data.template_type, {})
-    module_limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["modules"]
+    module_limit = get_plan_limits(current_user.plan, db)["modules"]
 
     # Config enviada no wizard (cores/logo customizados) sobrescreve o padrão do
     # template, mas não substitui o dict inteiro — só as chaves informadas.
@@ -73,7 +74,7 @@ async def duplicate_app(
     if not original:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
 
-    limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["apps"]
+    limit = get_plan_limits(current_user.plan, db)["apps"]
     if limit is not None:
         current_count = db.query(App).filter(App.user_id == current_user.id).count()
         if current_count >= limit:
@@ -136,7 +137,7 @@ async def get_app_usage(
     if not app:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
 
-    limits = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])
+    limits = get_plan_limits(current_user.plan, db)
 
     items_used = db.query(ModuleItem).filter(ModuleItem.app_id == app_id).count()
     categories_used = db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).count()
@@ -179,7 +180,7 @@ async def update_app(
     if app_data.config is not None:
         app.config = app_data.config
     if app_data.modules is not None:
-        module_limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["modules"]
+        module_limit = get_plan_limits(current_user.plan, db)["modules"]
         if len(app_data.modules) > module_limit:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

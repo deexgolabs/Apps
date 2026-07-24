@@ -91,6 +91,27 @@ def test_send_blocked_for_free_plan(client, register_user):
     assert "upgrade" in response.json()["detail"].lower()
 
 
+def test_push_history_records_title_and_body(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "pushhistory@example.com")
+    owner = db_session.query(User).filter(User.email == "pushhistory@example.com").first()
+    owner.plan = "pro"
+    db_session.commit()
+
+    send = client.post(
+        f"/api/apps/{app_id}/push/send",
+        json={"title": "Promoção", "body": "50% off hoje"},
+        headers=owner_headers,
+    )
+    assert send.status_code == 200
+
+    history = client.get(f"/api/apps/{app_id}/push/history", headers=owner_headers)
+    assert history.status_code == 200
+    entries = history.json()
+    assert len(entries) == 1
+    assert entries[0]["title"] == "Promoção"
+    assert entries[0]["body"] == "50% off hoje"
+
+
 def test_send_respects_monthly_limit(client, register_user, db_session):
     """Plano pro tem push_sends_per_month = 5 — o 6º envio no mês deve ser bloqueado."""
     app_id, owner_headers = _published_app(client, register_user, "pushlimit@example.com")

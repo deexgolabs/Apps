@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import api from '@/lib/api'
-import { FIXED_FORM_MODULES, LIST_MODULES, MODULE_FIELDS } from '@/lib/moduleFields'
+import { FIXED_FORM_MODULES, LIST_MODULES, MODULE_FIELDS, ORDER_MODULES, PAYMENT_GATEWAY_MODULES } from '@/lib/moduleFields'
 import { ICON_PICKER_OPTIONS } from '@/lib/moduleIcons'
 import ItemsManager from '@/components/ItemsManager'
 import SubmissionsList from '@/components/SubmissionsList'
+import OrdersList from '@/components/OrdersList'
 import EndUsersList from '@/components/EndUsersList'
 import PushComposer from '@/components/PushComposer'
 import ImageUploadField from '@/components/ImageUploadField'
@@ -34,7 +35,10 @@ export default function ModuleSettingsModal({
   onClose,
 }: ModuleSettingsModalProps) {
   const isListModule = moduleName in LIST_MODULES
-  const isFixedFormModule = FIXED_FORM_MODULES.includes(moduleName)
+  const isOrderModule = ORDER_MODULES.includes(moduleName)
+  const isPagamentoEntrega = moduleName === 'pagamento_entrega' || PAYMENT_GATEWAY_MODULES.includes(moduleName)
+  const isContatoPersonalizado = moduleName === 'contato_personalizado'
+  const isFixedFormModule = !isOrderModule && FIXED_FORM_MODULES.includes(moduleName)
   const isEndUserModule = moduleName === 'login_cadastro'
   const isPushModule = moduleName === 'push_notifications'
   const fields = MODULE_FIELDS[moduleName] || []
@@ -245,6 +249,8 @@ export default function ModuleSettingsModal({
 
               <ItemsManager appId={appId} moduleName={moduleName} supportsCategories={LIST_MODULES[moduleName]} />
             </>
+          ) : isOrderModule ? (
+            <OrdersList appId={appId} moduleName={moduleName} />
           ) : isFixedFormModule ? (
             <SubmissionsList appId={appId} moduleName={moduleName} />
           ) : isEndUserModule ? (
@@ -253,39 +259,55 @@ export default function ModuleSettingsModal({
             <PushComposer appId={appId} />
           ) : loading ? (
             <p className="text-sm text-gray-500">Carregando...</p>
-          ) : fields.length === 0 ? (
-            <p className="text-sm text-gray-500">Este módulo não tem outras configurações.</p>
           ) : (
-            fields.map((field) =>
-              field.type === 'image' ? (
-                <ImageUploadField
-                  key={field.key}
-                  label={field.label}
-                  value={values[field.key] || ''}
-                  onChange={(url) => setValues({ ...values, [field.key]: url })}
-                />
+            <>
+              {fields.length === 0 ? (
+                <p className="text-sm text-gray-500">Este módulo não tem outras configurações.</p>
               ) : (
-                <div key={field.key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
-                  {field.type === 'textarea' ? (
-                    <textarea
+                fields.map((field) =>
+                  field.type === 'image' ? (
+                    <ImageUploadField
+                      key={field.key}
+                      label={field.label}
                       value={values[field.key] || ''}
-                      onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
-                      placeholder={field.placeholder}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 h-24"
+                      onChange={(url) => setValues({ ...values, [field.key]: url })}
                     />
                   ) : (
-                    <input
-                      type={field.type === 'url' ? 'url' : 'text'}
-                      value={values[field.key] || ''}
-                      onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
-                      placeholder={field.placeholder}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                    />
-                  )}
-                </div>
-              )
-            )
+                    <div key={field.key}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+                      {field.type === 'textarea' ? (
+                        <textarea
+                          value={values[field.key] || ''}
+                          onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                          placeholder={field.placeholder}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 h-24"
+                        />
+                      ) : (
+                        <input
+                          type={field.type === 'url' ? 'url' : 'text'}
+                          value={values[field.key] || ''}
+                          onChange={(e) => setValues({ ...values, [field.key]: e.target.value })}
+                          placeholder={field.placeholder}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                        />
+                      )}
+                    </div>
+                  )
+                )
+              )}
+              {isPagamentoEntrega && (
+                <>
+                  <hr className="border-gray-200" />
+                  <OrdersList appId={appId} moduleName={moduleName} />
+                </>
+              )}
+              {isContatoPersonalizado && (
+                <>
+                  <hr className="border-gray-200" />
+                  <SubmissionsList appId={appId} moduleName={moduleName} />
+                </>
+              )}
+            </>
           )}
         </div>
 

@@ -49,9 +49,9 @@ export const MODULE_FIELDS: Record<string, ModuleField[]> = {
   contato_personalizado: [
     {
       key: 'campos',
-      label: 'Campos do formulário (um rótulo por linha)',
+      label: 'Campos do formulário (um por linha — Rótulo, Rótulo:numero, Rótulo:data — * no fim marca obrigatório)',
       type: 'textarea',
-      placeholder: 'Nome\nTelefone\nMensagem',
+      placeholder: 'Nome*\nTelefone:numero\nData de nascimento:data\nMensagem',
     },
   ],
   cartao_fidelidade: [
@@ -125,6 +125,41 @@ export const FORM_MODULE_FIELDS: Record<string, FormField[]> = {
 
 // Módulos de formulário com campos fixos — o modal ⚙ só mostra as respostas recebidas.
 export const FIXED_FORM_MODULES = Object.keys(FORM_MODULE_FIELDS)
+
+// Módulos cujo envio vira um Pedido (com status) em vez de uma resposta de contato simples.
+export const ORDER_MODULES = ['formulario_delivery', 'cotacao']
+
+// Campos de cliente capturados antes de confirmar "pagamento na entrega" (vira Pedido).
+export const PAGAMENTO_ENTREGA_CUSTOMER_FIELDS: FormField[] = [
+  { key: 'nome', label: 'Nome', type: 'text' },
+  { key: 'telefone', label: 'Telefone', type: 'text' },
+  { key: 'endereco', label: 'Endereço', type: 'textarea' },
+]
+
+// Formato do campo "campos" do contato_personalizado: um rótulo por linha, com
+// ":tipo" opcional (numero/data — texto é o padrão) e "*" no fim marcando
+// obrigatório. Sem ":tipo" continua funcionando como antes (texto livre).
+export interface CustomField {
+  key: string
+  label: string
+  type: 'texto' | 'numero' | 'data'
+  required: boolean
+}
+
+export function parseCustomFields(campos: string): CustomField[] {
+  return (campos || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [rawLabel, rawType] = line.split(':')
+      const required = rawLabel.trim().endsWith('*')
+      const label = rawLabel.trim().replace(/\*$/, '').trim()
+      const normalizedType = rawType?.trim().toLowerCase()
+      const type: CustomField['type'] = normalizedType === 'numero' || normalizedType === 'data' ? normalizedType : 'texto'
+      return { key: label, label, type, required }
+    })
+}
 
 // Módulos que usam itens/categorias (ItemsManager) em vez de MODULE_FIELDS.
 // O valor indica se o módulo suporta categorias além de itens.
