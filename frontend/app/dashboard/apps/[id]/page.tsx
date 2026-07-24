@@ -48,6 +48,7 @@ export default function AppEditorPage({ params }: PageProps) {
   const [iconUrl, setIconUrl] = useState('')
   const [splashUrl, setSplashUrl] = useState('')
   const [homeModule, setHomeModule] = useState('')
+  const [homeImageUrl, setHomeImageUrl] = useState('')
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [configuringModule, setConfiguringModule] = useState<string | null>(null)
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, any>>({})
@@ -80,6 +81,7 @@ export default function AppEditorPage({ params }: PageProps) {
         setIconUrl(appData.config?.icon_url || '')
         setSplashUrl(appData.config?.splash_url || '')
         setHomeModule(appData.config?.home_module || '')
+        setHomeImageUrl(appData.config?.home_image_url || '')
         setActiveModules(appData.modules || [])
         setModules(modulesRes.data)
       } catch (error) {
@@ -110,6 +112,7 @@ export default function AppEditorPage({ params }: PageProps) {
           icon_url: iconUrl,
           splash_url: splashUrl,
           home_module: homeModule,
+          home_image_url: homeImageUrl,
         },
         modules: activeModules,
       })
@@ -255,6 +258,15 @@ export default function AppEditorPage({ params }: PageProps) {
                     ))}
                   </select>
                 </div>
+
+                <ImageUploadField
+                  label="Imagem de destaque da tela inicial (opcional)"
+                  value={homeImageUrl}
+                  onChange={setHomeImageUrl}
+                />
+                <p className="text-xs text-gray-400 -mt-4">
+                  Aparece no topo da tela inicial, com o conteúdo do módulo logo abaixo.
+                </p>
               </div>
             )}
 
@@ -263,6 +275,7 @@ export default function AppEditorPage({ params }: PageProps) {
                 modules={modules}
                 activeModules={activeModules}
                 userPlan={userPlan}
+                primaryColor={primaryColor}
                 onAdd={(name) => setActiveModules([...activeModules, name])}
               />
             )}
@@ -300,6 +313,7 @@ export default function AppEditorPage({ params }: PageProps) {
             secondaryColor={secondaryColor}
             logoUrl={logoUrl}
             homeModule={homeModule}
+            homeImageUrl={homeImageUrl}
             editable
             onModulesChange={setActiveModules}
             onConfigureModule={setConfiguringModule}

@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore'
 import api from '@/lib/api'
 import PhoneFrame from '@/components/PhoneFrame'
 import ImageUploadField from '@/components/ImageUploadField'
-import { MODULE_ICONS } from '@/lib/moduleFields'
+import ModuleIcon from '@/components/ModuleIcon'
 import type { Module } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -223,8 +223,9 @@ export default function NewAppPage() {
                 <p className="text-xs text-gray-400 mb-3">Módulos incluídos no template "{template?.name}":</p>
                 <div className="space-y-2">
                   {(template?.modules || []).map((name) => (
-                    <div key={name} className="text-sm text-gray-700 border-b border-gray-100 pb-2">
-                      {MODULE_ICONS[name] || '📦'} {moduleByName.get(name)?.description || name}
+                    <div key={name} className="flex items-center gap-2 text-sm text-gray-700 border-b border-gray-100 pb-2">
+                      <ModuleIcon moduleName={name} color={primaryColor} size={14} />
+                      {moduleByName.get(name)?.description || name}
                     </div>
                   ))}
                 </div>

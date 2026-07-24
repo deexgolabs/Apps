@@ -1,6 +1,6 @@
 'use client'
 
-import { MODULE_ICONS } from '@/lib/moduleFields'
+import ModuleIcon from '@/components/ModuleIcon'
 import type { Module } from '@/types'
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, business: 2 }
@@ -32,10 +32,11 @@ interface AddModulePanelProps {
   modules: Module[]
   activeModules: string[]
   userPlan: string
+  primaryColor: string
   onAdd: (name: string) => void
 }
 
-export default function AddModulePanel({ modules, activeModules, userPlan, onAdd }: AddModulePanelProps) {
+export default function AddModulePanel({ modules, activeModules, userPlan, primaryColor, onAdd }: AddModulePanelProps) {
   const available = modules.filter((m) => !activeModules.includes(m.name))
 
   if (available.length === 0) {
@@ -80,9 +81,7 @@ export default function AddModulePanel({ modules, activeModules, userPlan, onAdd
                       : 'border-gray-200 hover:border-indigo-400 hover:shadow-sm'
                   }`}
                 >
-                  <span className="w-10 h-10 shrink-0 rounded-full bg-indigo-50 flex items-center justify-center text-lg">
-                    {MODULE_ICONS[module.name] || '📦'}
-                  </span>
+                  <ModuleIcon moduleName={module.name} color={primaryColor} size={20} />
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
                       <span className="text-sm font-medium text-gray-900">{module.description}</span>

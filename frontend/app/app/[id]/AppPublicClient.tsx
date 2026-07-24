@@ -74,6 +74,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
         secondaryColor={config.secondary_color || '#10B981'}
         logoUrl={config.logo_url || ''}
         homeModule={config.home_module || ''}
+        homeImageUrl={config.home_image_url || ''}
       />
     </div>
   )

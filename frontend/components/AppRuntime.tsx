@@ -18,7 +18,8 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import api, { publicApi } from '@/lib/api'
-import { FIXED_FORM_MODULES, FORM_MODULE_FIELDS, LIST_MODULES, MODULE_ICONS, PAYMENT_GATEWAY_MODULES } from '@/lib/moduleFields'
+import { FIXED_FORM_MODULES, FORM_MODULE_FIELDS, LIST_MODULES, PAYMENT_GATEWAY_MODULES } from '@/lib/moduleFields'
+import ModuleIcon from '@/components/ModuleIcon'
 import type { Module, ModuleCategory, ModuleItem } from '@/types'
 import toast from 'react-hot-toast'
 
@@ -34,6 +35,7 @@ interface AppRuntimeProps {
   secondaryColor: string
   logoUrl: string
   homeModule: string
+  homeImageUrl?: string
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void
@@ -43,7 +45,8 @@ interface AppRuntimeProps {
 function SortableModuleRow({
   name,
   label,
-  icon,
+  config,
+  primaryColor,
   selected,
   onSelect,
   onConfigure,
@@ -51,7 +54,8 @@ function SortableModuleRow({
 }: {
   name: string
   label: string
-  icon: string
+  config: Record<string, any> | undefined
+  primaryColor: string
   selected: boolean
   onSelect: () => void
   onConfigure: () => void
@@ -62,8 +66,13 @@ function SortableModuleRow({
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className={`w-full flex items-center gap-1 pr-2 border-b border-gray-100 ${selected ? 'bg-indigo-50' : ''}`}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        backgroundColor: selected ? `${primaryColor}1A` : undefined,
+      }}
+      className="w-full flex items-center gap-2 pr-2 border-b border-gray-100"
     >
       <button
         type="button"
@@ -77,9 +86,11 @@ function SortableModuleRow({
       <button
         type="button"
         onClick={onSelect}
-        className={`flex-1 text-left truncate text-sm py-3 ${selected ? 'font-semibold text-indigo-600' : 'text-gray-700'}`}
+        className="flex-1 flex items-center gap-2 text-left truncate text-sm py-3 min-w-0"
+        style={{ color: selected ? primaryColor : undefined, fontWeight: selected ? 600 : undefined }}
       >
-        {icon} {label}
+        <ModuleIcon moduleName={name} config={config} color={primaryColor} size={14} />
+        <span className="truncate">{label}</span>
       </button>
       <button
         type="button"
@@ -896,6 +907,7 @@ export default function AppRuntime({
   secondaryColor,
   logoUrl,
   homeModule,
+  homeImageUrl,
   editable = false,
   onModulesChange,
   onConfigureModule,
@@ -934,6 +946,7 @@ export default function AppRuntime({
   }, [activeModules, homeModule])
 
   const moduleByName = new Map(modules.map((m) => [m.name, m]))
+  const isHomeScreen = selectedModule === (homeModule || activeModules[0])
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -962,6 +975,10 @@ export default function AppRuntime({
         )}
         <span className="w-4" />
       </div>
+
+      {isHomeScreen && homeImageUrl && (
+        <img src={homeImageUrl} alt="" className="w-full h-32 object-cover shrink-0" />
+      )}
 
       <div className="min-h-[320px] p-4" style={{ borderTop: `2px solid ${secondaryColor}` }}>
         {loading ? (
@@ -1026,7 +1043,8 @@ export default function AppRuntime({
                         key={name}
                         name={name}
                         label={configs[name]?.display_name || module?.description || name}
-                        icon={configs[name]?.icon || MODULE_ICONS[name] || '📦'}
+                        config={configs[name]}
+                        primaryColor={primaryColor}
                         selected={selectedModule === name}
                         onSelect={() => {
                           setSelectedModule(name)
@@ -1042,6 +1060,7 @@ export default function AppRuntime({
             ) : (
               activeModules.map((name) => {
                 const module = moduleByName.get(name)
+                const selected = selectedModule === name
                 return (
                   <button
                     key={name}
@@ -1050,12 +1069,15 @@ export default function AppRuntime({
                       setSelectedModule(name)
                       setMenuOpen(false)
                     }}
-                    className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 hover:bg-gray-50 ${
-                      selectedModule === name ? 'font-semibold text-indigo-600' : 'text-gray-700'
-                    }`}
+                    className="w-full flex items-center gap-2 text-left px-4 py-3 text-sm border-b border-gray-100 hover:bg-gray-50"
+                    style={{
+                      backgroundColor: selected ? `${primaryColor}1A` : undefined,
+                      color: selected ? primaryColor : undefined,
+                      fontWeight: selected ? 600 : undefined,
+                    }}
                   >
-                    {configs[name]?.icon || MODULE_ICONS[name] || '📦'}{' '}
-                    {configs[name]?.display_name || module?.description || name}
+                    <ModuleIcon moduleName={name} config={configs[name]} color={primaryColor} size={14} />
+                    <span className="truncate">{configs[name]?.display_name || module?.description || name}</span>
                   </button>
                 )
               })

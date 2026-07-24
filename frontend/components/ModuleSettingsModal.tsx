@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import api from '@/lib/api'
-import { FIXED_FORM_MODULES, LIST_MODULES, MODULE_FIELDS, MODULE_ICONS } from '@/lib/moduleFields'
+import { FIXED_FORM_MODULES, LIST_MODULES, MODULE_FIELDS } from '@/lib/moduleFields'
+import { ICON_PICKER_OPTIONS } from '@/lib/moduleIcons'
 import ItemsManager from '@/components/ItemsManager'
 import SubmissionsList from '@/components/SubmissionsList'
 import EndUsersList from '@/components/EndUsersList'
@@ -42,6 +43,7 @@ export default function ModuleSettingsModal({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [iconTab, setIconTab] = useState<'emoji' | 'vetor'>('emoji')
 
   // Todo módulo agora busca/salva config — mesmo os que não têm campos próprios
   // (form fixo, login, push) ganham ícone + nome de exibição customizáveis aqui.
@@ -49,7 +51,9 @@ export default function ModuleSettingsModal({
     const fetchConfig = async () => {
       try {
         const response = await api.get(`/api/apps/${appId}/module-config/${moduleName}`)
-        setValues(response.data.settings || {})
+        const settings = response.data.settings || {}
+        setValues(settings)
+        setIconTab(settings.icon_name ? 'vetor' : 'emoji')
       } catch (error) {
         toast.error('Erro ao carregar configurações do módulo')
       } finally {
@@ -103,40 +107,82 @@ export default function ModuleSettingsModal({
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-[80px_1fr] gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ícone</label>
-              <input
-                type="text"
-                value={values.icon || ''}
-                onChange={(e) => setValues({ ...values, icon: e.target.value })}
-                maxLength={4}
-                placeholder={MODULE_ICONS[moduleName] || '🍕'}
-                className="w-full px-3 py-2 text-xl text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nome de exibição</label>
-              <input
-                type="text"
-                value={values.display_name || ''}
-                onChange={(e) => setValues({ ...values, display_name: e.target.value })}
-                placeholder={moduleLabel}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome de exibição</label>
+            <input
+              type="text"
+              value={values.display_name || ''}
+              onChange={(e) => setValues({ ...values, display_name: e.target.value })}
+              placeholder={moduleLabel}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
           </div>
-          <div className="flex flex-wrap gap-1">
-            {ICON_SUGGESTIONS.map((emoji) => (
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ícone</label>
+            <div className="flex gap-2 mb-2">
               <button
-                key={emoji}
                 type="button"
-                onClick={() => setValues({ ...values, icon: emoji })}
-                className="w-8 h-8 flex items-center justify-center text-lg rounded hover:bg-gray-100"
+                onClick={() => setIconTab('emoji')}
+                className={`flex-1 py-1 text-xs rounded-lg font-medium ${
+                  iconTab === 'emoji' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
               >
-                {emoji}
+                Emoji
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => setIconTab('vetor')}
+                className={`flex-1 py-1 text-xs rounded-lg font-medium ${
+                  iconTab === 'vetor' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                Ícone
+              </button>
+            </div>
+
+            {iconTab === 'emoji' ? (
+              <>
+                <input
+                  type="text"
+                  value={values.icon || ''}
+                  onChange={(e) => setValues({ ...values, icon: e.target.value, icon_name: '' })}
+                  maxLength={4}
+                  placeholder="🍕"
+                  className="w-full px-3 py-2 text-xl text-center border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {ICON_SUGGESTIONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => setValues({ ...values, icon: emoji, icon_name: '' })}
+                      className="w-8 h-8 flex items-center justify-center text-lg rounded hover:bg-gray-100"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="grid grid-cols-6 gap-2">
+                {ICON_PICKER_OPTIONS.map(({ name, Icon }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setValues({ ...values, icon_name: name, icon: '' })}
+                    className={`w-9 h-9 flex items-center justify-center rounded-lg border transition ${
+                      values.icon_name === name
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title={name}
+                  >
+                    <Icon size={18} />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <hr className="border-gray-200" />

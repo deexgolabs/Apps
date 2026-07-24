@@ -13,6 +13,7 @@ interface AppPreviewProps {
   secondaryColor: string
   logoUrl: string
   homeModule: string
+  homeImageUrl?: string
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void
