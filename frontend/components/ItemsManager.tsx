@@ -19,12 +19,14 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const [items, setItems] = useState<ModuleItem[]>([])
   const [loading, setLoading] = useState(true)
 
+  const [editingId, setEditingId] = useState<number | null>(null)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [itemName, setItemName] = useState('')
   const [itemDescription, setItemDescription] = useState('')
   const [itemPrice, setItemPrice] = useState('')
   const [itemImageUrl, setItemImageUrl] = useState('')
   const [itemCategoryId, setItemCategoryId] = useState('')
+  const [itemStock, setItemStock] = useState('')
   const [itemData, setItemData] = useState('')
   const [itemHora, setItemHora] = useState('')
 
@@ -75,31 +77,57 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     }
   }
 
-  const handleAddItem = async (e: React.FormEvent) => {
+  const resetItemForm = () => {
+    setEditingId(null)
+    setItemName('')
+    setItemDescription('')
+    setItemPrice('')
+    setItemImageUrl('')
+    setItemCategoryId('')
+    setItemStock('')
+    setItemData('')
+    setItemHora('')
+  }
+
+  const startEditItem = (item: ModuleItem) => {
+    setEditingId(item.id)
+    setItemName(item.name)
+    setItemDescription(item.description || '')
+    setItemPrice(item.price != null ? String(item.price) : '')
+    setItemImageUrl(item.image_url || '')
+    setItemCategoryId(item.category_id != null ? String(item.category_id) : '')
+    setItemStock(item.stock != null ? String(item.stock) : '')
+    setItemData(item.extra?.data || '')
+    setItemHora(item.extra?.hora || '')
+  }
+
+  const handleSubmitItem = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!itemName.trim()) return
 
+    const payload = {
+      name: itemName,
+      description: itemDescription || null,
+      price: isAgenda ? null : itemPrice ? parseFloat(itemPrice) : null,
+      image_url: isAgenda ? null : itemImageUrl || null,
+      category_id: itemCategoryId ? Number(itemCategoryId) : null,
+      stock: isAgenda ? null : itemStock.trim() ? parseInt(itemStock, 10) : null,
+      extra: isAgenda ? { data: itemData, hora: itemHora } : {},
+    }
+
     try {
-      const response = await api.post(`${base}/items`, {
-        name: itemName,
-        description: itemDescription || null,
-        price: isAgenda ? null : itemPrice ? parseFloat(itemPrice) : null,
-        image_url: isAgenda ? null : itemImageUrl || null,
-        category_id: itemCategoryId ? Number(itemCategoryId) : null,
-        extra: isAgenda ? { data: itemData, hora: itemHora } : {},
-        order: items.length,
-      })
-      setItems([...items, response.data])
-      setItemName('')
-      setItemDescription('')
-      setItemPrice('')
-      setItemImageUrl('')
-      setItemCategoryId('')
-      setItemData('')
-      setItemHora('')
-      toast.success('Item adicionado!')
+      if (editingId) {
+        const response = await api.put(`${base}/items/${editingId}`, payload)
+        setItems(items.map((i) => (i.id === editingId ? response.data : i)))
+        toast.success('Item atualizado!')
+      } else {
+        const response = await api.post(`${base}/items`, { ...payload, order: items.length })
+        setItems([...items, response.data])
+        toast.success('Item adicionado!')
+      }
+      resetItemForm()
     } catch (error: any) {
-      showApiError(error, 'Erro ao criar item')
+      showApiError(error, editingId ? 'Erro ao atualizar item' : 'Erro ao criar item')
     }
   }
 
@@ -107,6 +135,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     try {
       await api.delete(`${base}/items/${itemId}`)
       setItems(items.filter((i) => i.id !== itemId))
+      if (editingId === itemId) resetItemForm()
     } catch (error) {
       toast.error('Erro ao remover item')
     }
@@ -161,8 +190,8 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       )}
 
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Novo item</p>
-        <form onSubmit={handleAddItem} className="space-y-2 border border-gray-200 rounded-lg p-3">
+        <p className="text-sm font-medium text-gray-700 mb-2">{editingId ? 'Editar item' : 'Novo item'}</p>
+        <form onSubmit={handleSubmitItem} className="space-y-2 border border-gray-200 rounded-lg p-3">
           <input
             type="text"
             value={itemName}
@@ -194,14 +223,25 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
             </div>
           ) : (
             <>
-              <input
-                type="number"
-                step="0.01"
-                value={itemPrice}
-                onChange={(e) => setItemPrice(e.target.value)}
-                placeholder="Preço (opcional)"
-                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={itemPrice}
+                  onChange={(e) => setItemPrice(e.target.value)}
+                  placeholder="Preço (opcional)"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={itemStock}
+                  onChange={(e) => setItemStock(e.target.value)}
+                  placeholder="Estoque (ilimitado)"
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+              </div>
               <ImageUploadField label="Imagem (opcional)" value={itemImageUrl} onChange={setItemImageUrl} />
             </>
           )}
@@ -219,12 +259,23 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
               ))}
             </select>
           )}
-          <button
-            type="submit"
-            className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
-          >
-            + Adicionar item
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              className="flex-1 bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
+            >
+              {editingId ? 'Salvar alterações' : '+ Adicionar item'}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetItemForm}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
@@ -239,7 +290,11 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                 key={item.id}
                 className="flex items-center justify-between gap-2 border border-gray-200 rounded-lg px-3 py-2"
               >
-                <div className="flex items-center gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => startEditItem(item)}
+                  className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                >
                   {item.image_url && (
                     <img src={item.image_url} alt="" className="w-8 h-8 object-cover rounded flex-shrink-0" />
                   )}
@@ -248,6 +303,9 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                       {item.name}
                       {item.price != null && (
                         <span className="text-gray-500 font-normal"> · R$ {item.price.toFixed(2)}</span>
+                      )}
+                      {item.stock != null && (
+                        <span className="text-gray-500 font-normal"> · estoque: {item.stock}</span>
                       )}
                       {isAgenda && (item.extra?.data || item.extra?.hora) && (
                         <span className="text-gray-500 font-normal">
@@ -263,7 +321,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                       </p>
                     )}
                   </div>
-                </div>
+                </button>
                 <button
                   type="button"
                   onClick={() => handleRemoveItem(item.id)}

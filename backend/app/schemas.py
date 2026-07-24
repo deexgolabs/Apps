@@ -298,6 +298,18 @@ class OrderUpdate(BaseModel):
     status: str
 
 
+class OrderItemResponse(BaseModel):
+    id: int
+    module_item_id: Optional[int] = None
+    name: str
+    unit_price: float
+    quantity: int
+    subtotal: float
+
+    class Config:
+        from_attributes = True
+
+
 class OrderResponse(BaseModel):
     id: int
     app_id: int
@@ -305,14 +317,26 @@ class OrderResponse(BaseModel):
     end_user_id: Optional[int] = None
     data: dict
     amount: Optional[float] = None
+    subtotal: Optional[float] = None
     payment_method: Optional[str] = None
     payment_reference: Optional[str] = None
     status: str
     created_at: datetime
     updated_at: datetime
+    items: List[OrderItemResponse] = []
 
     class Config:
         from_attributes = True
+
+
+class CartItemInput(BaseModel):
+    item_id: int
+    quantity: int = 1
+
+
+class CartCheckoutRequest(BaseModel):
+    items: List[CartItemInput]
+    customer: dict = {}
 
 
 # ===== CATEGORY / ITEM SCHEMAS =====
@@ -342,6 +366,7 @@ class ItemCreate(BaseModel):
     category_id: Optional[int] = None
     extra: dict = {}
     order: int = 0
+    stock: Optional[int] = None
 
 
 class ItemUpdate(BaseModel):
@@ -352,6 +377,7 @@ class ItemUpdate(BaseModel):
     category_id: Optional[int] = None
     extra: Optional[dict] = None
     order: Optional[int] = None
+    stock: Optional[int] = None
 
 
 class ItemResponse(BaseModel):
@@ -365,6 +391,7 @@ class ItemResponse(BaseModel):
     image_url: Optional[str] = None
     extra: dict
     order: int
+    stock: Optional[int] = None
 
     class Config:
         from_attributes = True

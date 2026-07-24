@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, ForeignKey, Float, UniqueConstraint
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime, timezone
 
 Base = declarative_base()
@@ -130,11 +130,29 @@ class Order(Base):
     end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=True)
     data = Column(JSON, default=dict)
     amount = Column(Float, nullable=True)
+    subtotal = Column(Float, nullable=True)  # soma dos OrderItem, antes de frete/desconto
     payment_method = Column(String, nullable=True)
     payment_reference = Column(String, nullable=True)
     status = Column(String, default="pending")  # pending, confirmed, preparing, completed, cancelled
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+    items = relationship("OrderItem", order_by="OrderItem.id", cascade="all, delete-orphan")
+
+
+class OrderItem(Base):
+    """Item estruturado de um pedido feito via carrinho (cardapio/catalogo).
+    name/unit_price são snapshot no momento da compra — sobrevivem a mudanças
+    ou remoção do ModuleItem original."""
+    __tablename__ = "order_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    module_item_id = Column(Integer, ForeignKey("module_items.id"), nullable=True)
+    name = Column(String, nullable=False)
+    unit_price = Column(Float, nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    subtotal = Column(Float, nullable=False)
 
 
 class PlanConfig(Base):
@@ -177,3 +195,4 @@ class ModuleItem(Base):
     image_url = Column(String, nullable=True)
     extra = Column(JSON, default=dict)
     order = Column(Integer, default=0)
+    stock = Column(Integer, nullable=True)  # None = ilimitado/não rastreado

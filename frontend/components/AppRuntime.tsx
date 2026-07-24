@@ -20,6 +20,7 @@ import { CSS } from '@dnd-kit/utilities'
 import api, { publicApi } from '@/lib/api'
 import Skeleton from '@/components/Skeleton'
 import {
+  CART_ENABLED_MODULES,
   FIXED_FORM_MODULES,
   FORM_MODULE_FIELDS,
   LIST_MODULES,
@@ -29,8 +30,12 @@ import {
   parseCustomFields,
 } from '@/lib/moduleFields'
 import ModuleIcon from '@/components/ModuleIcon'
-import type { Module, ModuleCategory, ModuleItem } from '@/types'
+import type { Module, ModuleCategory, ModuleItem, Order } from '@/types'
 import toast from 'react-hot-toast'
+import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
+import { CartProvider, useOptionalCart } from '@/context/CartContext'
+import CartButton from '@/components/CartButton'
+import CartDrawer from '@/components/CartDrawer'
 
 export type RuntimeMode = 'owner' | 'public'
 
@@ -259,12 +264,15 @@ function ListModuleContent({
   appId,
   moduleName,
   layout,
+  cartEnabled,
 }: {
   mode: RuntimeMode
   appId: string
   moduleName: string
   layout: 'list' | 'grid'
+  cartEnabled?: boolean
 }) {
+  const cart = useOptionalCart()
   const [items, setItems] = useState<ModuleItem[]>([])
   const [categories, setCategories] = useState<ModuleCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -314,12 +322,26 @@ function ListModuleContent({
   const isAgenda = moduleName === 'agenda_interna'
   const isGrid = layout === 'grid'
 
+  const outOfStock = (item: ModuleItem) => item.stock !== null && item.stock <= 0
+
+  const addToCartButton = (item: ModuleItem) =>
+    cartEnabled && cart && (
+      <button
+        type="button"
+        disabled={outOfStock(item)}
+        onClick={() => cart.addItem(moduleName, item)}
+        className="shrink-0 text-xs font-semibold px-2 py-1 rounded bg-indigo-600 text-white disabled:opacity-40 disabled:bg-gray-400"
+      >
+        {outOfStock(item) ? 'Esgotado' : '+ Adicionar'}
+      </button>
+    )
+
   const renderItem = (item: ModuleItem) => (
     <div key={item.id} className="flex items-center gap-2 border-b border-gray-100 pb-2">
       {item.image_url && (
         <img src={item.image_url} alt="" className="w-10 h-10 object-cover rounded flex-shrink-0" />
       )}
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-gray-900 truncate">
           {item.name}
           {item.price != null && <span className="text-gray-500 font-normal"> · R$ {item.price.toFixed(2)}</span>}
@@ -332,6 +354,7 @@ function ListModuleContent({
         </p>
         {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
       </div>
+      {addToCartButton(item)}
     </div>
   )
 
@@ -356,6 +379,7 @@ function ListModuleContent({
           <p className="text-[11px] text-gray-500">{item.extra?.data} {item.extra?.hora}</p>
         )}
         {item.description && <p className="text-[11px] text-gray-500 line-clamp-2">{item.description}</p>}
+        {cartEnabled && cart && <div className="mt-1.5">{addToCartButton(item)}</div>}
       </div>
     </div>
   )
@@ -590,23 +614,6 @@ function FreteCalculator({ settings }: { settings: Record<string, any> | undefin
   )
 }
 
-function endUserSessionKey(appId: string) {
-  return `end_user_session_${appId}`
-}
-
-// Se o cliente final estiver logado (login_cadastro), anexa o token na criação
-// do pedido pra ele aparecer em "Meus pedidos" — opcional, formulário funciona
-// igual pra visitante sem conta.
-function endUserAuthHeader(appId: string): Record<string, string> {
-  const saved = localStorage.getItem(endUserSessionKey(appId))
-  if (!saved) return {}
-  try {
-    const { token } = JSON.parse(saved)
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  } catch {
-    return {}
-  }
-}
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Pendente',
@@ -1095,6 +1102,7 @@ export default function AppRuntime({
   const [configs, setConfigs] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)
   const [selectedModule, setSelectedModule] = useState(homeModule || activeModules[0] || '')
 
   const sensors = useSensors(
@@ -1136,7 +1144,7 @@ export default function AppRuntime({
     onModulesChange?.(arrayMove(activeModules, oldIndex, newIndex))
   }
 
-  return (
+  const content = (
     <div className="contents" style={{ fontFamily: fontFamily || undefined }}>
       <div className="h-10 flex items-center justify-between px-3" style={{ backgroundColor: primaryColor }}>
         <button
@@ -1176,6 +1184,7 @@ export default function AppRuntime({
                 appId={appId}
                 moduleName={selectedModule}
                 layout={configs[selectedModule]?.layout === 'grid' ? 'grid' : 'list'}
+                cartEnabled={mode === 'public' && CART_ENABLED_MODULES.includes(selectedModule)}
               />
             ) : FIXED_FORM_MODULES.includes(selectedModule) ? (
               <FormModuleContent appId={appId} moduleName={selectedModule} />
@@ -1274,6 +1283,15 @@ export default function AppRuntime({
           </div>
         </div>
       )}
+
+      {mode === 'public' && (
+        <>
+          <CartButton onClick={() => setCartOpen(true)} color={primaryColor} />
+          <CartDrawer appId={appId} open={cartOpen} onClose={() => setCartOpen(false)} />
+        </>
+      )}
     </div>
   )
+
+  return mode === 'public' ? <CartProvider appId={appId}>{content}</CartProvider> : content
 }

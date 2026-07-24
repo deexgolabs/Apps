@@ -172,3 +172,6 @@ export const LIST_MODULES: Record<string, boolean> = {
   agenda_interna: false,
   mercado_livre: false,
 }
+
+// Módulos de lista que permitem adicionar itens ao carrinho e fechar pedido.
+export const CART_ENABLED_MODULES = ['cardapio', 'catalogo']

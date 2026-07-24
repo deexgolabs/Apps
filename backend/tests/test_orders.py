@@ -1,4 +1,4 @@
-from app.models import Order
+from app.models import Order, OrderItem, ModuleItem
 
 
 def _published_app(client, register_user, email="orders@example.com"):
@@ -101,3 +101,68 @@ def test_my_orders_requires_end_user_login(client, register_user):
     mine = client.get(f"/api/apps/{app_id}/my-orders", headers=end_user_headers)
     assert mine.status_code == 200
     assert len(mine.json()) == 1
+
+
+def _create_item(client, app_id, owner_headers, name="Pizza", price=30.0, stock=None):
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/items",
+        json={"name": name, "price": price, "stock": stock},
+        headers=owner_headers,
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def test_cart_checkout_creates_order_items_and_decrements_stock(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "cartstock@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Coxinha", price=8.0, stock=5)
+    unlimited_id = _create_item(client, app_id, owner_headers, name="Refrigerante", price=6.0, stock=None)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "quantity": 2}, {"item_id": unlimited_id, "quantity": 3}],
+            "customer": {"nome": "Cliente", "telefone": "11999999999"},
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert body["subtotal"] == 8.0 * 2 + 6.0 * 3
+    assert body["amount"] == body["subtotal"]
+    assert len(body["items"]) == 2
+
+    order_items = db_session.query(OrderItem).filter(OrderItem.order_id == body["id"]).all()
+    assert len(order_items) == 2
+    assert {oi.name for oi in order_items} == {"Coxinha", "Refrigerante"}
+
+    tracked_item = db_session.query(ModuleItem).filter(ModuleItem.id == item_id).first()
+    assert tracked_item.stock == 3
+    untracked_item = db_session.query(ModuleItem).filter(ModuleItem.id == unlimited_id).first()
+    assert untracked_item.stock is None
+
+
+def test_cart_checkout_rejects_when_stock_insufficient(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "cartstockfail@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Bolo", price=20.0, stock=1)
+
+    before_count = db_session.query(Order).filter(Order.app_id == app_id).count()
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 2}], "customer": {}},
+    )
+    assert response.status_code == 409
+
+    after_count = db_session.query(Order).filter(Order.app_id == app_id).count()
+    assert after_count == before_count
+    unchanged_item = db_session.query(ModuleItem).filter(ModuleItem.id == item_id).first()
+    assert unchanged_item.stock == 1
+
+
+def test_cart_checkout_rejects_empty_cart(client, register_user):
+    app_id, _ = _published_app(client, register_user, "cartempty@example.com")
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [], "customer": {}},
+    )
+    assert response.status_code == 400

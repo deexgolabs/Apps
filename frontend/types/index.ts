@@ -51,4 +51,30 @@ export interface ModuleItem {
   image_url: string | null
   extra: Record<string, any>
   order: number
+  stock: number | null
+}
+
+export interface OrderItem {
+  id: number
+  module_item_id: number | null
+  name: string
+  unit_price: number
+  quantity: number
+  subtotal: number
+}
+
+export interface Order {
+  id: number
+  app_id: number
+  module_name: string
+  end_user_id: number | null
+  data: Record<string, any>
+  amount: number | null
+  subtotal: number | null
+  payment_method: string | null
+  payment_reference: string | null
+  status: string
+  created_at: string
+  updated_at: string
+  items: OrderItem[]
 }

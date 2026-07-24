@@ -3,16 +3,7 @@
 import { useEffect, useState } from 'react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
-
-interface Order {
-  id: number
-  module_name: string
-  data: Record<string, any>
-  amount: number | null
-  payment_method: string | null
-  status: string
-  created_at: string
-}
+import type { Order } from '@/types'
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendente' },
@@ -82,8 +73,23 @@ export default function OrdersList({ appId, moduleName }: { appId: string; modul
               ))}
             </select>
           </div>
+          {order.items.length > 0 && (
+            <table className="w-full text-xs">
+              <tbody>
+                {order.items.map((oi) => (
+                  <tr key={oi.id} className="border-b border-gray-100 last:border-0">
+                    <td className="py-1 text-gray-700">
+                      {oi.quantity}x {oi.name}
+                    </td>
+                    <td className="py-1 text-right text-gray-500">R$ {oi.unit_price.toFixed(2)}</td>
+                    <td className="py-1 text-right text-gray-700 font-medium">R$ {oi.subtotal.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
           {order.amount != null && (
-            <p className="text-gray-700 font-medium">R$ {order.amount.toFixed(2)}</p>
+            <p className="text-gray-700 font-medium">Total: R$ {order.amount.toFixed(2)}</p>
           )}
           {Object.entries(order.data).map(([key, value]) => (
             <p key={key} className="text-gray-700">

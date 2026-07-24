@@ -14,6 +14,7 @@ from app.models import (
     ModuleCategory,
     ModuleItem,
     Order,
+    OrderItem,
     PlanConfig,
     PushSendLog,
     PushSubscription,
@@ -212,6 +213,9 @@ async def delete_app(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
 
     app_name = app.name
+    order_ids = [row.id for row in db.query(Order.id).filter(Order.app_id == app_id).all()]
+    if order_ids:
+        db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(synchronize_session=False)
     db.query(Order).filter(Order.app_id == app_id).delete(synchronize_session=False)
     db.query(FormSubmission).filter(FormSubmission.app_id == app_id).delete(synchronize_session=False)
     db.query(PushSendLog).filter(PushSendLog.app_id == app_id).delete(synchronize_session=False)
