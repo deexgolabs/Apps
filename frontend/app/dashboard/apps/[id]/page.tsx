@@ -9,6 +9,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import ModuleSettingsModal from '@/components/ModuleSettingsModal'
 import AppPreview from '@/components/AppPreview'
 import AddModulePanel from '@/components/AddModulePanel'
+import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
 import ImageUploadField from '@/components/ImageUploadField'
 import type { App, Module } from '@/types'
@@ -17,6 +18,14 @@ import toast from 'react-hot-toast'
 interface PageProps {
   params: Promise<{ id: string }>
 }
+
+const FONT_OPTIONS = [
+  { value: '', label: 'Padrão do sistema' },
+  { value: 'Georgia, serif', label: 'Georgia' },
+  { value: 'Verdana, sans-serif', label: 'Verdana' },
+  { value: "'Courier New', monospace", label: 'Courier New' },
+  { value: "'Trebuchet MS', sans-serif", label: 'Trebuchet MS' },
+]
 
 type Tab = 'geral' | 'marca' | 'modulos' | 'publicar'
 
@@ -49,6 +58,7 @@ export default function AppEditorPage({ params }: PageProps) {
   const [splashUrl, setSplashUrl] = useState('')
   const [homeModule, setHomeModule] = useState('')
   const [homeImageUrl, setHomeImageUrl] = useState('')
+  const [fontFamily, setFontFamily] = useState('')
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [configuringModule, setConfiguringModule] = useState<string | null>(null)
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, any>>({})
@@ -82,6 +92,7 @@ export default function AppEditorPage({ params }: PageProps) {
         setSplashUrl(appData.config?.splash_url || '')
         setHomeModule(appData.config?.home_module || '')
         setHomeImageUrl(appData.config?.home_image_url || '')
+        setFontFamily(appData.config?.font_family || '')
         setActiveModules(appData.modules || [])
         setModules(modulesRes.data)
       } catch (error) {
@@ -113,6 +124,7 @@ export default function AppEditorPage({ params }: PageProps) {
           splash_url: splashUrl,
           home_module: homeModule,
           home_image_url: homeImageUrl,
+          font_family: fontFamily,
         },
         modules: activeModules,
       })
@@ -139,6 +151,12 @@ export default function AppEditorPage({ params }: PageProps) {
       toast.error('Erro ao excluir aplicativo')
     }
   }
+
+  const checklistItems = [
+    { label: 'Definir logo ou ícone do app', done: !!(logoUrl || iconUrl) },
+    { label: 'Personalizar pelo menos um módulo (nome ou ícone)', done: Object.values(moduleConfigs).some((c: any) => c?.display_name || c?.icon || c?.icon_name) },
+    { label: 'Publicar o aplicativo', done: app?.status === 'published' },
+  ]
 
   if (loading) {
     return (
@@ -182,6 +200,22 @@ export default function AppEditorPage({ params }: PageProps) {
           <form onSubmit={handleSave} className="space-y-8">
             {activeTab === 'geral' && (
               <div className="space-y-6">
+                <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-4">
+                  <p className="text-sm font-medium text-indigo-900 mb-2">
+                    Progresso: {checklistItems.filter((i) => i.done).length} de {checklistItems.length} concluído
+                  </p>
+                  <ul className="space-y-1">
+                    {checklistItems.map((item) => (
+                      <li key={item.label} className={`text-sm flex items-center gap-2 ${item.done ? 'text-indigo-700' : 'text-indigo-400'}`}>
+                        <span>{item.done ? '✓' : '○'}</span>
+                        {item.label}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <UsagePanel appId={id} />
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Nome do Aplicativo
@@ -267,6 +301,19 @@ export default function AppEditorPage({ params }: PageProps) {
                 <p className="text-xs text-gray-400 -mt-4">
                   Aparece no topo da tela inicial, com o conteúdo do módulo logo abaixo.
                 </p>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Fonte</label>
+                  <select
+                    value={fontFamily}
+                    onChange={(e) => setFontFamily(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  >
+                    {FONT_OPTIONS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
@@ -314,6 +361,7 @@ export default function AppEditorPage({ params }: PageProps) {
             logoUrl={logoUrl}
             homeModule={homeModule}
             homeImageUrl={homeImageUrl}
+            fontFamily={fontFamily}
             editable
             onModulesChange={setActiveModules}
             onConfigureModule={setConfiguringModule}

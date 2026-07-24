@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     facebook_app_id: str = ""
     facebook_app_secret: str = ""
 
+    sentry_dsn: str = ""
+
     model_config = SettingsConfigDict(env_file=".env")
 
     @property

@@ -1,12 +1,13 @@
 import logging
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.email_utils import send_email
 from app.models import User
+from app.rate_limit import limiter
 from app.schemas import (
     UserCreate, UserLogin, Token, UserResponse,
     ForgotPasswordRequest, ResetPasswordRequest,
@@ -34,7 +35,8 @@ def _send_verification_email(user: User) -> None:
 
 
 @router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, user_data: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -64,7 +66,8 @@ async def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user_data.email).first()
 
     if not db_user or not verify_password(user_data.password, db_user.password_hash):
@@ -83,7 +86,8 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
 
 
 @router.post("/forgot-password")
-async def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def forgot_password(request: Request, payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
 
     if user:

@@ -16,6 +16,7 @@ interface AppPreviewProps {
   logoUrl: string
   homeModule: string
   homeImageUrl?: string
+  fontFamily?: string
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void

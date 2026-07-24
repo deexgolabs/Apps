@@ -5,6 +5,7 @@ import api from '@/lib/api'
 import ImageUploadField from '@/components/ImageUploadField'
 import type { ModuleCategory, ModuleItem } from '@/types'
 import toast from 'react-hot-toast'
+import { showApiError } from '@/lib/apiError'
 
 interface ItemsManagerProps {
   appId: string
@@ -58,7 +59,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       setCategories([...categories, response.data])
       setNewCategoryName('')
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar categoria')
+      showApiError(error, 'Erro ao criar categoria')
     }
   }
 
@@ -96,7 +97,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       setItemHora('')
       toast.success('Item adicionado!')
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar item')
+      showApiError(error, 'Erro ao criar item')
     }
   }
 

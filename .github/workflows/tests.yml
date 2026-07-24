@@ -1,0 +1,58 @@
+name: Backend tests
+
+# Só passa a rodar de verdade quando este repositório for empurrado pra um
+# remoto (GitHub) — ver "Repositório remoto" no README pro passo a passo.
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: plataforma_apps
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql+psycopg://user:password@localhost:55432/plataforma_apps
+      TEST_DATABASE_URL: postgresql+psycopg://user:password@localhost:55432/plataforma_apps_test
+      JWT_SECRET: ci-only-secret
+      VAPID_PUBLIC_KEY: BEYmo8cmyFF16_X6LPwj6sgYXZR7nxu5YZZr1KD9a35WYzteWCKRbenaMDSlneU0rbGF6wjwsO2X4rGWRfrW6bo
+      VAPID_PRIVATE_KEY: nSeAnC5N5qePR8Lcmtq43GwJP5fsu3Dr3JUQruz1npc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create test database
+        run: |
+          PGPASSWORD=password psql -h localhost -p 55432 -U user -d plataforma_apps -c "CREATE DATABASE plataforma_apps_test;"
+
+      - name: Run Alembic migrations
+        run: alembic upgrade head
+
+      - name: Run pytest
+        run: pytest tests/ -q

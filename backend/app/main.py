@@ -1,11 +1,20 @@
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.config import settings
+from app.rate_limit import limiter
 from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth
 from app.seed import seed_modules
+
+# Sem DSN (padrão), sentry_sdk.init vira um no-op — nada é enviado nem
+# processado. Defina SENTRY_DSN no .env pra ativar de verdade.
+if settings.sentry_dsn:
+    sentry_sdk.init(dsn=settings.sentry_dsn, traces_sample_rate=0.1, send_default_pii=False)
 
 # Schema do banco é responsabilidade do Alembic (`alembic upgrade head`), não do app subindo.
 
@@ -18,6 +27,9 @@ app = FastAPI(
     version="0.1.0",
     description="MVP de plataforma de criação de aplicativos"
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS
 app.add_middleware(

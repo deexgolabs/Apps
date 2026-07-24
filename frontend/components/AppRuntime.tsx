@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import api, { publicApi } from '@/lib/api'
+import Skeleton from '@/components/Skeleton'
 import { FIXED_FORM_MODULES, FORM_MODULE_FIELDS, LIST_MODULES, PAYMENT_GATEWAY_MODULES } from '@/lib/moduleFields'
 import ModuleIcon from '@/components/ModuleIcon'
 import type { Module, ModuleCategory, ModuleItem } from '@/types'
@@ -36,6 +37,7 @@ interface AppRuntimeProps {
   logoUrl: string
   homeModule: string
   homeImageUrl?: string
+  fontFamily?: string
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void
@@ -282,7 +284,15 @@ function ListModuleContent({
     fetchData()
   }, [mode, appId, moduleName, supportsCategories])
 
-  if (loading) return <p className="text-sm text-gray-400">Carregando...</p>
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    )
+  }
   if (items.length === 0) {
     return (
       <p className="text-sm text-gray-400 italic text-center mt-8">
@@ -908,6 +918,7 @@ export default function AppRuntime({
   logoUrl,
   homeModule,
   homeImageUrl,
+  fontFamily,
   editable = false,
   onModulesChange,
   onConfigureModule,
@@ -958,7 +969,7 @@ export default function AppRuntime({
   }
 
   return (
-    <>
+    <div className="contents" style={{ fontFamily: fontFamily || undefined }}>
       <div className="h-10 flex items-center justify-between px-3" style={{ backgroundColor: primaryColor }}>
         <button
           type="button"
@@ -982,41 +993,46 @@ export default function AppRuntime({
 
       <div className="min-h-[320px] p-4" style={{ borderTop: `2px solid ${secondaryColor}` }}>
         {loading ? (
-          <p className="text-sm text-gray-400">Carregando...</p>
+          <div className="space-y-3">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-24 w-full" />
+          </div>
         ) : activeModules.length === 0 ? (
           <p className="text-sm text-gray-400 italic text-center mt-8">Nenhum módulo ativo ainda</p>
-        ) : selectedModule in LIST_MODULES ? (
-          <ListModuleContent
-            key={selectedModule}
-            mode={mode}
-            appId={appId}
-            moduleName={selectedModule}
-            layout={configs[selectedModule]?.layout === 'grid' ? 'grid' : 'list'}
-          />
-        ) : FIXED_FORM_MODULES.includes(selectedModule) ? (
-          <FormModuleContent key={selectedModule} appId={appId} moduleName={selectedModule} />
-        ) : selectedModule === 'contato_personalizado' ? (
-          <DynamicFormModuleContent
-            key={selectedModule}
-            appId={appId}
-            moduleName={selectedModule}
-            settings={configs[selectedModule]}
-          />
-        ) : selectedModule === 'calculo_frete' ? (
-          <FreteCalculator key={selectedModule} settings={configs[selectedModule]} />
-        ) : selectedModule === 'login_cadastro' ? (
-          <EndUserAuthWidget key={selectedModule} appId={appId} />
-        ) : selectedModule === 'push_notifications' ? (
-          <PushSubscribeWidget key={selectedModule} mode={mode} appId={appId} />
-        ) : PAYMENT_GATEWAY_MODULES.includes(selectedModule) || selectedModule === 'pagamento_entrega' ? (
-          <PaymentWidget
-            key={selectedModule}
-            appId={appId}
-            moduleName={selectedModule}
-            settings={configs[selectedModule]}
-          />
         ) : (
-          <ModuleContent key={selectedModule} moduleName={selectedModule} settings={configs[selectedModule]} />
+          <div key={selectedModule} className="module-fade-in">
+            {selectedModule in LIST_MODULES ? (
+              <ListModuleContent
+                mode={mode}
+                appId={appId}
+                moduleName={selectedModule}
+                layout={configs[selectedModule]?.layout === 'grid' ? 'grid' : 'list'}
+              />
+            ) : FIXED_FORM_MODULES.includes(selectedModule) ? (
+              <FormModuleContent appId={appId} moduleName={selectedModule} />
+            ) : selectedModule === 'contato_personalizado' ? (
+              <DynamicFormModuleContent
+                appId={appId}
+                moduleName={selectedModule}
+                settings={configs[selectedModule]}
+              />
+            ) : selectedModule === 'calculo_frete' ? (
+              <FreteCalculator settings={configs[selectedModule]} />
+            ) : selectedModule === 'login_cadastro' ? (
+              <EndUserAuthWidget appId={appId} />
+            ) : selectedModule === 'push_notifications' ? (
+              <PushSubscribeWidget mode={mode} appId={appId} />
+            ) : PAYMENT_GATEWAY_MODULES.includes(selectedModule) || selectedModule === 'pagamento_entrega' ? (
+              <PaymentWidget
+                appId={appId}
+                moduleName={selectedModule}
+                settings={configs[selectedModule]}
+              />
+            ) : (
+              <ModuleContent moduleName={selectedModule} settings={configs[selectedModule]} />
+            )}
+          </div>
         )}
       </div>
 
@@ -1051,7 +1067,12 @@ export default function AppRuntime({
                           setMenuOpen(false)
                         }}
                         onConfigure={() => onConfigureModule?.(name)}
-                        onRemove={() => onModulesChange?.(activeModules.filter((m) => m !== name))}
+                        onRemove={() => {
+                          const label = configs[name]?.display_name || module?.description || name
+                          if (window.confirm(`Remover "${label}" deste app? A configuração salva fica guardada e volta se você adicionar o módulo de novo.`)) {
+                            onModulesChange?.(activeModules.filter((m) => m !== name))
+                          }
+                        }}
                       />
                     )
                   })}
@@ -1085,6 +1106,6 @@ export default function AppRuntime({
           </div>
         </div>
       )}
-    </>
+    </div>
   )
 }

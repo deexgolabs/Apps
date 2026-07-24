@@ -1,8 +1,10 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import App, User
+from app.models import App, AppConfig, ModuleCategory, ModuleItem, PushSendLog, User
 from app.schemas import AppCreate, AppResponse, AppUpdate
 from app.dependencies import get_current_user
 from app.constants import PLAN_LIMITS, APP_TEMPLATES
@@ -58,6 +60,49 @@ async def create_app(
     return db_app
 
 
+@router.post("/{app_id}/duplicate", response_model=AppResponse, status_code=status.HTTP_201_CREATED)
+async def duplicate_app(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Duplica um app existente (nome, cor, módulos e configuração de cada
+    módulo) como rascunho novo. Não duplica dados de uso real (itens
+    cadastrados, envios de formulário, usuários finais)."""
+    original = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not original:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+
+    limit = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])["apps"]
+    if limit is not None:
+        current_count = db.query(App).filter(App.user_id == current_user.id).count()
+        if current_count >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Limite de {limit} app(s) atingido para o plano '{current_user.plan}'. Faça upgrade para criar mais."
+            )
+
+    duplicate = App(
+        user_id=current_user.id,
+        name=f"{original.name} (cópia)",
+        description=original.description,
+        template_type=original.template_type,
+        status="draft",
+        config=dict(original.config or {}),
+        modules=list(original.modules or []),
+    )
+    db.add(duplicate)
+    db.commit()
+    db.refresh(duplicate)
+
+    original_configs = db.query(AppConfig).filter(AppConfig.app_id == original.id).all()
+    for cfg in original_configs:
+        db.add(AppConfig(app_id=duplicate.id, module_id=cfg.module_id, settings=dict(cfg.settings or {})))
+    db.commit()
+
+    return duplicate
+
+
 @router.get("/{app_id}", response_model=AppResponse)
 async def get_app(
     app_id: int,
@@ -77,6 +122,35 @@ async def get_app(
         )
 
     return app
+
+
+@router.get("/{app_id}/usage")
+async def get_app_usage(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Uso atual do app vs limites do plano — itens, categorias e envios de
+    push no mês corrente."""
+    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+
+    limits = PLAN_LIMITS.get(current_user.plan, PLAN_LIMITS["free"])
+
+    items_used = db.query(ModuleItem).filter(ModuleItem.app_id == app_id).count()
+    categories_used = db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).count()
+
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    push_sends_used = db.query(PushSendLog).filter(
+        PushSendLog.app_id == app_id, PushSendLog.sent_at >= month_start
+    ).count()
+
+    return {
+        "items": {"used": items_used, "limit": limits["items"]},
+        "categories": {"used": categories_used, "limit": limits["categories"]},
+        "push_sends_this_month": {"used": push_sends_used, "limit": limits["push_sends_per_month"]},
+    }
 
 
 @router.put("/{app_id}", response_model=AppResponse)

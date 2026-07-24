@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import ModuleIcon from '@/components/ModuleIcon'
 import type { Module } from '@/types'
 
@@ -37,6 +38,7 @@ interface AddModulePanelProps {
 }
 
 export default function AddModulePanel({ modules, activeModules, userPlan, primaryColor, onAdd }: AddModulePanelProps) {
+  const [search, setSearch] = useState('')
   const available = modules.filter((m) => !activeModules.includes(m.name))
 
   if (available.length === 0) {
@@ -47,8 +49,13 @@ export default function AddModulePanel({ modules, activeModules, userPlan, prima
     )
   }
 
+  const query = search.trim().toLowerCase()
+  const filtered = query
+    ? available.filter((m) => m.description.toLowerCase().includes(query))
+    : available
+
   const byCategory = new Map<string, Module[]>()
-  for (const module of available) {
+  for (const module of filtered) {
     const list = byCategory.get(module.category) || []
     list.push(module)
     byCategory.set(module.category, list)
@@ -61,6 +68,16 @@ export default function AddModulePanel({ modules, activeModules, userPlan, prima
 
   return (
     <div className="space-y-8">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar módulo..."
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+      />
+      {orderedCategories.length === 0 && (
+        <p className="text-sm text-gray-400 italic text-center py-6">Nenhum módulo encontrado para "{search}".</p>
+      )}
       {orderedCategories.map((category) => (
         <div key={category}>
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">

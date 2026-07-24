@@ -18,9 +18,12 @@ Plataforma de criação de aplicativos sem código (estilo [Web Robot Apps](http
 - **32 módulos** cobrindo conteúdo, cardápio/loja, formulários, comunicação, engajamento, pagamentos, mídia e integrações — incluindo cardápio/catálogo com categorias, agenda interna, cartão fidelidade, login e cadastro de usuários finais (com login social via **Facebook**), checkout via Mercado Pago/PayPal/PagSeguro/pagamento na entrega, notificações push, e sincronização de produtos do **Mercado Livre**.
 - **Templates de negócio**: restaurante, loja, serviço, delivery, salão de beleza, academia, pet shop, imobiliária, igreja/ONG, educação, outro.
 - **Publicação**: app publicado vira uma PWA instalável (manifest dinâmico, service worker, QR code de instalação) em `/app/{id}`.
-- **Cobrança da plataforma**: upgrade de plano via gateway próprio (Mercado Pago/PayPal/PagSeguro), limites por plano (`free`/`pro`/`business`).
-- **Upload de imagem real**: logo, ícone, splash e imagens de item vão pro disco do backend (`/uploads`), servidos como arquivo estático.
-- Suíte de testes (`pytest`) cobrindo apps, auth, admin, billing, público.
+- **Cobrança da plataforma**: upgrade de plano via gateway próprio (Mercado Pago/PayPal/PagSeguro), limites por plano (`free`/`pro`/`business`) — apps, módulos, itens, categorias e envios de push por mês, com painel de uso e aviso clicável de upgrade ao bater o limite.
+- **Upload de imagem real**: logo, ícone, splash, imagem de fundo de ícone de módulo e imagens de item vão pro disco do backend (`/uploads`), servidos como arquivo estático — com dica de tamanho recomendado nos campos que a WRA documenta.
+- **Duplicar app** e checklist de progresso (logo/ícone, módulo configurado, publicado) na aba Geral do editor.
+- **Preview Android/iOS** alternável, fonte customizável por app, e ícones vetoriais ([lucide-react](https://lucide.dev)) por módulo (com opção de emoji ou imagem de fundo customizados).
+- Rate limiting (`slowapi`) nas rotas públicas de autenticação; monitoramento de erro (Sentry) preparado e inativo até receber uma DSN.
+- Suíte de testes (`pytest`) cobrindo apps, auth, admin, billing, push, público.
 
 ## Estrutura
 
@@ -113,12 +116,38 @@ alembic upgrade head
 
 `alembic/env.py` já lê a `DATABASE_URL` das mesmas `settings` do app e usa `Base.metadata` de `app/models.py` — não precisa duplicar nada no `alembic.ini`.
 
+## Rate limiting
+
+Rotas públicas sensíveis a abuso (`login`/`register`/`forgot-password` do dono da conta, `login`/`register` de usuário final) têm limite de 5 requisições por minuto por IP (`slowapi`, em memória — não precisa de Redis pra uma instância só). Passar do limite retorna `429`. Nos testes (`tests/conftest.py`), o limiter é desligado (`app.state.limiter.enabled = False`) pra não interferir entre os vários `register_user` de testes diferentes.
+
+## Monitoramento de erro (Sentry) — preparado, inativo
+
+O SDK já está integrado (backend: `sentry_sdk.init` em `app/main.py`; frontend: `sentry.client/server/edge.config.ts` + `instrumentation.ts`), mas sem DSN configurado **nada é coletado nem enviado** — é código morto de propósito até você ativar:
+
+1. Crie um projeto em [sentry.io](https://sentry.io) (um projeto Python/FastAPI, um projeto Next.js).
+2. Cole os DSNs: `SENTRY_DSN` no `backend/.env`, `NEXT_PUBLIC_SENTRY_DSN` no `frontend/.env.local`.
+3. Pro lado do navegador (client-side), rode `npx @sentry/wizard@latest -i nextjs` dentro de `frontend/` com o DSN em mãos — a forma de inicializar no navegador varia entre versões do Next.js/Sentry, e o wizard detecta a certa pra versão instalada (o servidor/edge já funcionam sem isso, via `instrumentation.ts`).
+
+## Repositório remoto e CI
+
+O projeto já tem um repositório git local (`git log` mostra o histórico), mas sem remoto — sem isso, o workflow em `.github/workflows/tests.yml` (roda o `pytest` a cada push/PR) não executa. Pra ativar:
+
+```bash
+cd plataforma-apps
+git remote add origin <url-do-seu-repositorio-github-ou-gitlab>
+git push -u origin master
+```
+
+Depois disso, todo `push`/PR roda a suíte de testes automaticamente contra um Postgres efêmero — sem precisar de mais nenhuma configuração.
+
 ## Pendências antes de um deploy real
 
 - `JWT_SECRET` no `.env` ainda é o placeholder — trocar por uma chave forte gerada de verdade.
 - `CORS_ORIGINS`/`FRONTEND_URL`/`BACKEND_URL` apontam pra `localhost` — ajustar pros domínios reais.
 - SMTP, credenciais de gateway de pagamento (Mercado Pago/PayPal/PagSeguro) e Facebook App ID/Secret estão vazios — sem eles, e-mails só logam no console e os checkouts/login social retornam erro claro de "não configurado" (comportamento intencional, não é bug).
-- Sem Dockerfile/CI ainda — hoje roda tudo local via `uvicorn`/`npm run dev`; fica como próximo passo quando houver um repositório remoto pra rodar CI contra.
+- Sentry sem DSN (ver seção acima) — nenhum erro é monitorado até isso ser configurado.
+- Sem repositório remoto ainda (ver seção acima) — o workflow de CI existe mas não roda até o `git push` inicial.
+- Sem Dockerfile pro backend/frontend ainda — hoje roda tudo local via `uvicorn`/`npm run dev`.
 
 ## Notas de implementação
 

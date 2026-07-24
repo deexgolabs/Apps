@@ -1,4 +1,4 @@
-from app.models import PushSubscription
+from app.models import PushSubscription, User
 
 
 def _published_app(client, register_user, email="push@example.com"):
@@ -48,8 +48,13 @@ def test_subscribe_fails_for_draft_app(client, register_user):
     assert response.status_code == 404
 
 
-def test_send_requires_owner_authentication(client, register_user):
+def test_send_requires_owner_authentication(client, register_user, db_session):
     app_id, owner_headers = _published_app(client, register_user, "pushowner@example.com")
+    # push_sends_per_month é 0 no plano free (não vende push pra esse plano) —
+    # sobe pra "pro" só pra testar a autenticação/autorização, não o limite.
+    owner = db_session.query(User).filter(User.email == "pushowner@example.com").first()
+    owner.plan = "pro"
+    db_session.commit()
     other = register_user(email="pushother@example.com")
     other_headers = {"Authorization": f"Bearer {other['access_token']}"}
 
@@ -71,3 +76,40 @@ def test_send_requires_owner_authentication(client, register_user):
     # dono autenticado e VAPID configurado: envia para 0 inscritos (nenhum se inscreveu neste app)
     assert owner_response.status_code == 200
     assert owner_response.json() == {"sent": 0, "failed": 0, "total": 0}
+
+
+def test_send_blocked_for_free_plan(client, register_user):
+    """Plano free tem push_sends_per_month = 0 — nem o dono consegue enviar."""
+    app_id, owner_headers = _published_app(client, register_user, "pushfree@example.com")
+
+    response = client.post(
+        f"/api/apps/{app_id}/push/send",
+        json={"title": "Oi", "body": "Teste"},
+        headers=owner_headers,
+    )
+    assert response.status_code == 403
+    assert "upgrade" in response.json()["detail"].lower()
+
+
+def test_send_respects_monthly_limit(client, register_user, db_session):
+    """Plano pro tem push_sends_per_month = 5 — o 6º envio no mês deve ser bloqueado."""
+    app_id, owner_headers = _published_app(client, register_user, "pushlimit@example.com")
+    owner = db_session.query(User).filter(User.email == "pushlimit@example.com").first()
+    owner.plan = "pro"
+    db_session.commit()
+
+    for _ in range(5):
+        response = client.post(
+            f"/api/apps/{app_id}/push/send",
+            json={"title": "Oi", "body": "Teste"},
+            headers=owner_headers,
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        f"/api/apps/{app_id}/push/send",
+        json={"title": "Oi", "body": "Teste"},
+        headers=owner_headers,
+    )
+    assert blocked.status_code == 403
+    assert "upgrade" in blocked.json()["detail"].lower()

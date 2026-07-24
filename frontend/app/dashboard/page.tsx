@@ -1,14 +1,32 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useAppStore } from '@/store/useAppStore'
 import api from '@/lib/api'
+import Skeleton from '@/components/Skeleton'
 import toast from 'react-hot-toast'
+import { showApiError } from '@/lib/apiError'
 
 export default function DashboardPage() {
   const apps = useAppStore((state) => state.apps)
   const setApps = useAppStore((state) => state.setApps)
+  const addApp = useAppStore((state) => state.addApp)
+  const [loading, setLoading] = useState(true)
+  const [duplicatingId, setDuplicatingId] = useState<number | null>(null)
+
+  const handleDuplicate = async (appId: number) => {
+    setDuplicatingId(appId)
+    try {
+      const response = await api.post(`/api/apps/${appId}/duplicate`)
+      addApp(response.data)
+      toast.success('App duplicado!')
+    } catch (error: any) {
+      showApiError(error, 'Erro ao duplicar app')
+    } finally {
+      setDuplicatingId(null)
+    }
+  }
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -17,6 +35,8 @@ export default function DashboardPage() {
         setApps(response.data)
       } catch (error) {
         toast.error('Erro ao carregar apps')
+      } finally {
+        setLoading(false)
       }
     }
 
@@ -35,7 +55,17 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {apps.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-lg shadow p-6 space-y-3">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-1/3" />
+            </div>
+          ))}
+        </div>
+      ) : apps.length === 0 ? (
         <div className="bg-white rounded-lg shadow p-12 text-center">
           <p className="text-gray-600 mb-4">Você ainda não tem nenhum aplicativo</p>
           <Link
@@ -63,12 +93,22 @@ export default function DashboardPage() {
                 }`}>
                   {app.status}
                 </span>
-                <Link
-                  href={`/dashboard/apps/${app.id}`}
-                  className="text-indigo-600 hover:text-indigo-700"
-                >
-                  Editar →
-                </Link>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicate(app.id)}
+                    disabled={duplicatingId === app.id}
+                    className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  >
+                    {duplicatingId === app.id ? 'Duplicando...' : 'Duplicar'}
+                  </button>
+                  <Link
+                    href={`/dashboard/apps/${app.id}`}
+                    className="text-indigo-600 hover:text-indigo-700"
+                  >
+                    Editar →
+                  </Link>
+                </div>
               </div>
             </div>
           ))}

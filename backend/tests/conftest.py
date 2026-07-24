@@ -52,6 +52,10 @@ def client(db_session):
         yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
+    # Rate limiting é por IP e o TestClient usa sempre o mesmo IP fake — sem
+    # desligar aqui, os vários register_user/login de testes diferentes
+    # estourariam o limite entre si.
+    app.state.limiter.enabled = False
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()

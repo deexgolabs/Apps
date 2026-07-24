@@ -1,11 +1,12 @@
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.config import settings
 from app.database import get_db
 from app.models import App, AppUser, User
+from app.rate_limit import limiter
 from app.schemas import EndUserCreate, EndUserLogin, EndUserResponse, EndUserToken
 from app.utils import hash_password, verify_password, create_access_token
 from app.dependencies import get_current_user, get_current_end_user
@@ -52,7 +53,8 @@ def get_or_create_facebook_end_user(
 
 
 @router.post("/register", response_model=EndUserToken, status_code=status.HTTP_201_CREATED)
-async def register_end_user(app_id: int, user_data: EndUserCreate, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register_end_user(request: Request, app_id: int, user_data: EndUserCreate, db: Session = Depends(get_db)):
     """Cadastro de usuário final do app publicado. Rota pública."""
     app = db.query(App).filter(App.id == app_id).first()
     if not app:
@@ -82,7 +84,8 @@ async def register_end_user(app_id: int, user_data: EndUserCreate, db: Session =
 
 
 @router.post("/login", response_model=EndUserToken)
-async def login_end_user(app_id: int, credentials: EndUserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login_end_user(request: Request, app_id: int, credentials: EndUserLogin, db: Session = Depends(get_db)):
     """Login de usuário final do app publicado. Rota pública."""
     end_user = db.query(AppUser).filter(AppUser.app_id == app_id, AppUser.email == credentials.email).first()
 

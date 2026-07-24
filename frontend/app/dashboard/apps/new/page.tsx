@@ -10,6 +10,7 @@ import ImageUploadField from '@/components/ImageUploadField'
 import ModuleIcon from '@/components/ModuleIcon'
 import type { Module } from '@/types'
 import toast from 'react-hot-toast'
+import { showApiError } from '@/lib/apiError'
 
 interface Template {
   id: string
@@ -98,7 +99,7 @@ export default function NewAppPage() {
       toast.success('Aplicativo criado com sucesso!')
       router.push(`/dashboard/apps/${response.data.id}`)
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Erro ao criar aplicativo')
+      showApiError(error, 'Erro ao criar aplicativo')
     } finally {
       setLoading(false)
     }

@@ -106,6 +106,16 @@ class PushSubscription(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class PushSendLog(Base):
+    """Um registro por chamada de envio (broadcast), não por assinante —
+    o limite do plano é sobre quantos envios o dono do app dispara por mês."""
+    __tablename__ = "push_send_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    sent_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class ModuleItem(Base):
     __tablename__ = "module_items"
 

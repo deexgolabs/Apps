@@ -75,6 +75,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
         logoUrl={config.logo_url || ''}
         homeModule={config.home_module || ''}
         homeImageUrl={config.home_image_url || ''}
+        fontFamily={config.font_family || ''}
       />
     </div>
   )

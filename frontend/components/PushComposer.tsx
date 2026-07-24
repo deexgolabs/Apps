@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
+import { showApiError } from '@/lib/apiError'
 
 export default function PushComposer({ appId }: { appId: string }) {
   const [title, setTitle] = useState('')
@@ -19,7 +20,7 @@ export default function PushComposer({ appId }: { appId: string }) {
       setTitle('')
       setBody('')
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Erro ao enviar notificação')
+      showApiError(error, 'Erro ao enviar notificação')
     } finally {
       setSending(false)
     }
