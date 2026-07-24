@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Impede o navegador de re-temear controles nativos (select, checkbox,
+     input type=color/date) para dark quando o SO está em modo escuro —
+     sem isso, o texto das opções de <select> fica branco-sobre-branco. */
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* A interface é sempre em tema claro (cards brancos, fundo cinza-claro) — não
+   existe um design escuro. Sem essa remoção, o modo escuro do SO deixava o
+   texto quase branco sobre os cards/inputs brancos, tornando tudo ilegível. */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+input,
+textarea,
+select {
+  color: #111827;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+}
