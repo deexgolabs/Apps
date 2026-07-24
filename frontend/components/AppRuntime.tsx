@@ -279,12 +279,14 @@ function ListModuleContent({
           mode === 'owner'
             ? `/api/apps/${appId}/modules/${moduleName}`
             : `/api/apps/${appId}/public/modules/${moduleName}`
-        const requests = [client.get<ModuleItem[]>(`${base}/items`)]
-        if (supportsCategories) requests.push(client.get<ModuleCategory[]>(`${base}/categories`))
+        const itemsPromise = client.get<ModuleItem[]>(`${base}/items`)
+        const categoriesPromise = supportsCategories
+          ? client.get<ModuleCategory[]>(`${base}/categories`)
+          : Promise.resolve(null)
 
-        const [itemsRes, categoriesRes] = await Promise.all(requests)
-        setItems(itemsRes.data as ModuleItem[])
-        if (categoriesRes) setCategories(categoriesRes.data as unknown as ModuleCategory[])
+        const [itemsRes, categoriesRes] = await Promise.all([itemsPromise, categoriesPromise])
+        setItems(itemsRes.data)
+        if (categoriesRes) setCategories(categoriesRes.data)
       } finally {
         setLoading(false)
       }
@@ -996,11 +998,15 @@ function PaymentWidget({
   )
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
   const rawData = window.atob(base64)
-  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)))
+  const outputArray = new Uint8Array(rawData.length)
+  for (let i = 0; i < rawData.length; i++) {
+    outputArray[i] = rawData.charCodeAt(i)
+  }
+  return outputArray
 }
 
 function PushSubscribeWidget({ mode, appId }: { mode: RuntimeMode; appId: string }) {

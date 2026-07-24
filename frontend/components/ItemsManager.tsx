@@ -32,12 +32,14 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
 
   const fetchAll = async () => {
     try {
-      const requests = [api.get<ModuleItem[]>(`${base}/items`)]
-      if (supportsCategories) requests.push(api.get<ModuleCategory[]>(`${base}/categories`))
+      const itemsPromise = api.get<ModuleItem[]>(`${base}/items`)
+      const categoriesPromise = supportsCategories
+        ? api.get<ModuleCategory[]>(`${base}/categories`)
+        : Promise.resolve(null)
 
-      const [itemsRes, categoriesRes] = await Promise.all(requests)
-      setItems(itemsRes.data as ModuleItem[])
-      if (categoriesRes) setCategories(categoriesRes.data as unknown as ModuleCategory[])
+      const [itemsRes, categoriesRes] = await Promise.all([itemsPromise, categoriesPromise])
+      setItems(itemsRes.data)
+      if (categoriesRes) setCategories(categoriesRes.data)
     } catch (error) {
       toast.error('Erro ao carregar itens')
     } finally {
