@@ -770,16 +770,28 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
 }
 
 function MyOrders({ appId, token }: { appId: string; token: string }) {
-  const [orders, setOrders] = useState<{ id: number; module_name: string; status: string; created_at: string }[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const cart = useOptionalCart()
 
   useEffect(() => {
-    publicApi
-      .get(`/api/apps/${appId}/my-orders`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((response) => setOrders(response.data))
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    const fetchOrders = () => {
+      publicApi
+        .get(`/api/apps/${appId}/my-orders`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((response) => setOrders(response.data))
+        .catch(() => {})
+        .finally(() => setLoading(false))
+    }
+    fetchOrders()
+    const interval = setInterval(fetchOrders, 15000)
+    return () => clearInterval(interval)
   }, [appId, token])
+
+  const handleReorder = async (order: Order) => {
+    if (!cart) return
+    await cart.restoreFromOrder(order.items, order.module_name)
+    toast.success('Itens do pedido adicionados ao carrinho!')
+  }
 
   if (loading) return <p className="text-xs text-gray-400">Carregando pedidos...</p>
 
@@ -789,11 +801,22 @@ function MyOrders({ appId, token }: { appId: string; token: string }) {
     <div className="text-left space-y-2 pt-2 border-t border-gray-200">
       <p className="text-sm font-medium text-gray-700">Meus pedidos</p>
       {orders.map((order) => (
-        <div key={order.id} className="border border-gray-200 rounded-lg p-2 text-xs flex items-center justify-between">
-          <span className="text-gray-600">
-            {order.module_name} — {new Date(order.created_at).toLocaleDateString('pt-BR')}
-          </span>
-          <span className="font-medium text-gray-900">{ORDER_STATUS_LABELS[order.status] || order.status}</span>
+        <div key={order.id} className="border border-gray-200 rounded-lg p-2 text-xs space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-gray-600">
+              {order.module_name} — {new Date(order.created_at).toLocaleDateString('pt-BR')}
+            </span>
+            <span className="font-medium text-gray-900">{ORDER_STATUS_LABELS[order.status] || order.status}</span>
+          </div>
+          {cart && order.items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => handleReorder(order)}
+              className="text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              ↻ Pedir novamente
+            </button>
+          )}
         </div>
       ))}
     </div>

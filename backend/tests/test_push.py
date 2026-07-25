@@ -31,6 +31,35 @@ def test_subscribe_stores_subscription(client, register_user, db_session):
     assert subscription.endpoint == "https://fcm.example.com/send/abc123"
 
 
+def test_subscribe_links_end_user_when_logged_in(client, register_user, db_session):
+    app_id, _ = _published_app(client, register_user, "pushenduser@example.com")
+
+    register_end_user = client.post(
+        f"/api/apps/{app_id}/end-users/register",
+        json={"email": "clientepush@example.com", "password": "senha12345", "full_name": "Cliente"},
+    )
+    assert register_end_user.status_code == 201
+    end_user_token = register_end_user.json()["access_token"]
+
+    response = client.post(
+        f"/api/apps/{app_id}/public/push/subscribe",
+        json={
+            "endpoint": "https://fcm.example.com/send/enduser1",
+            "keys": {"p256dh": "fake-p256dh", "auth": "fake-auth"},
+        },
+        headers={"Authorization": f"Bearer {end_user_token}"},
+    )
+    assert response.status_code == 201
+
+    subscription = (
+        db_session.query(PushSubscription)
+        .filter(PushSubscription.endpoint == "https://fcm.example.com/send/enduser1")
+        .first()
+    )
+    assert subscription is not None
+    assert subscription.end_user_id is not None
+
+
 def test_subscribe_fails_for_draft_app(client, register_user):
     data = register_user(email="pushdraft@example.com")
     headers = {"Authorization": f"Bearer {data['access_token']}"}

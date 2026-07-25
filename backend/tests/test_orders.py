@@ -103,6 +103,35 @@ def test_my_orders_requires_end_user_login(client, register_user):
     assert len(mine.json()) == 1
 
 
+def test_update_order_status_notifies_end_user_without_crashing(client, register_user, db_session):
+    """Sem SMTP/VAPID configurados, os hooks de notificação de status devem
+    rodar em modo 'só log' e nunca quebrar a resposta da rota — mesmo
+    comportamento já aceito do e-mail de novo pedido."""
+    app_id, owner_headers = _published_app(client, register_user, "ordersnotify@example.com")
+
+    register_end_user = client.post(
+        f"/api/apps/{app_id}/end-users/register",
+        json={"email": "clientenotify@example.com", "password": "senha12345", "full_name": "Cliente"},
+    )
+    assert register_end_user.status_code == 201
+    end_user_token = register_end_user.json()["access_token"]
+
+    order = client.post(
+        f"/api/apps/{app_id}/modules/formulario_delivery/orders",
+        json={"data": {"nome": "Cliente"}},
+        headers={"Authorization": f"Bearer {end_user_token}"},
+    )
+    order_id = order.json()["id"]
+
+    updated = client.put(
+        f"/api/apps/{app_id}/orders/{order_id}",
+        json={"status": "confirmed"},
+        headers=owner_headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["status"] == "confirmed"
+
+
 def _create_item(client, app_id, owner_headers, name="Pizza", price=30.0, stock=None):
     response = client.post(
         f"/api/apps/{app_id}/modules/cardapio/items",

@@ -331,3 +331,11 @@ LIST_MODULES = {
     "guia_empresas": False,
     "agenda_interna": False,
 }
+
+ORDER_STATUS_LABELS = {
+    "pending": "Pendente",
+    "confirmed": "Confirmado",
+    "preparing": "Preparando",
+    "completed": "Concluído",
+    "cancelled": "Cancelado",
+}

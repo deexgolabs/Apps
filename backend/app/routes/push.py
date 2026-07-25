@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pywebpush import webpush, WebPushException
@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.models import App, PushSendLog, PushSubscription, User
+from app.dependencies import get_current_user, get_optional_end_user
+from app.models import App, AppUser, PushSendLog, PushSubscription, User
 from app.plan_limits import get_plan_limits
 from app.public_utils import get_published_app
 from app.schemas import PushSubscriptionCreate, PushSendRequest, PushSendLogResponse
@@ -35,17 +35,24 @@ async def get_vapid_public_key(app_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/public/push/subscribe", status_code=status.HTTP_201_CREATED)
-async def subscribe(app_id: int, payload: PushSubscriptionCreate, db: Session = Depends(get_db)):
+async def subscribe(
+    app_id: int,
+    payload: PushSubscriptionCreate,
+    db: Session = Depends(get_db),
+    end_user: Optional[AppUser] = Depends(get_optional_end_user),
+):
     app = get_published_app(app_id, db)
 
     existing = db.query(PushSubscription).filter(PushSubscription.endpoint == payload.endpoint).first()
     if existing:
         existing.app_id = app.id
+        existing.end_user_id = end_user.id if end_user else None
         existing.p256dh = payload.keys.p256dh
         existing.auth = payload.keys.auth
     else:
         db.add(PushSubscription(
             app_id=app.id,
+            end_user_id=end_user.id if end_user else None,
             endpoint=payload.endpoint,
             p256dh=payload.keys.p256dh,
             auth=payload.keys.auth,
@@ -53,6 +60,37 @@ async def subscribe(app_id: int, payload: PushSubscriptionCreate, db: Session = 
     db.commit()
 
     return {"message": "Inscrito com sucesso"}
+
+
+def send_push_to_end_user(app_id: int, end_user_id: int, title: str, body: str, db: Session) -> None:
+    """Push transacional (mudança de status de pedido) pro cliente final dono
+    da assinatura — best-effort, nunca levanta exceção, e não conta no limite
+    mensal de push do plano (isso é campanha, não notificação individual)."""
+    if not settings.vapid_private_key:
+        return
+    subscriptions = (
+        db.query(PushSubscription)
+        .filter(PushSubscription.app_id == app_id, PushSubscription.end_user_id == end_user_id)
+        .all()
+    )
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub.endpoint,
+                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                },
+                data=json.dumps({"title": title, "body": body}),
+                vapid_private_key=settings.vapid_private_key,
+                vapid_claims={"sub": settings.vapid_claims_email or "mailto:admin@example.com"},
+            )
+        except WebPushException as exc:
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code == 410:
+                db.delete(sub)
+            else:
+                logger.warning("Falha ao enviar push transacional para %s: %s", sub.endpoint, exc)
+    db.commit()
 
 
 @router.post("/push/send")

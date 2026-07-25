@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import toast from 'react-hot-toast'
 import { publicApi } from '@/lib/api'
-import type { OrderItem } from '@/types'
+import type { ItemVariation, OrderItem } from '@/types'
 
 export interface CartItem {
   item_id: number
@@ -110,22 +110,35 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
   const restoreFromOrder: CartContextValue['restoreFromOrder'] = async (orderItems, moduleName) => {
     try {
       const res = await publicApi.get(`/api/apps/${appId}/public/modules/${moduleName}/items`)
-      const currentItems: { id: number; name: string; price: number | null; image_url: string | null; stock: number | null }[] = res.data
+      const currentItems: {
+        id: number
+        name: string
+        price: number | null
+        image_url: string | null
+        stock: number | null
+        variations: ItemVariation[]
+      }[] = res.data
       const currentById = new Map(currentItems.map((i) => [i.id, i]))
       const restored: CartItem[] = []
       for (const oi of orderItems) {
         if (oi.module_item_id == null) continue
         const current = currentById.get(oi.module_item_id)
         if (!current) continue
+        const variation = oi.item_variation_id
+          ? current.variations.find((v) => v.id === oi.item_variation_id)
+          : undefined
+        // se a variação comprada não existe mais, não restaura esse item — o
+        // preço/estoque dela não pode mais ser conferido no servidor
+        if (oi.item_variation_id && !variation) continue
         restored.push({
           item_id: current.id,
-          variation_id: oi.item_variation_id ?? null,
+          variation_id: variation ? variation.id : null,
           module_name: moduleName,
-          name: current.name,
-          unit_price: current.price || 0,
+          name: variation ? `${current.name} (${variation.name})` : current.name,
+          unit_price: (variation ? variation.price : current.price) || 0,
           quantity: oi.quantity,
           image_url: current.image_url,
-          stock: current.stock,
+          stock: variation ? variation.stock : current.stock,
         })
       }
       setItems(restored)

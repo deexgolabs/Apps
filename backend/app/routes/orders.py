@@ -5,12 +5,14 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.email_utils import send_email
 from app.models import App, AppConfig, AppUser, ItemVariation, Module, ModuleItem, Order, OrderItem, User
 from app.public_utils import get_published_app
 from app.routes.coupons import validate_coupon
+from app.routes.push import send_push_to_end_user
 from app.schemas import CartCheckoutRequest, OrderCreate, OrderResponse, OrderUpdate
 from app.utils import compute_frete, is_within_operating_hours
 
@@ -234,6 +236,29 @@ async def list_orders(
     return query.order_by(Order.created_at.desc()).all()
 
 
+def _notify_customer_status_change(app: App, order: Order, db: Session) -> None:
+    """Avisa o cliente final (se logado) que o status do pedido mudou —
+    e-mail + push dedicado, cada um best-effort e isolado, nunca conta no
+    limite mensal de push (é notificação individual, não campanha)."""
+    if not order.end_user_id:
+        return
+    label = ORDER_STATUS_LABELS.get(order.status, order.status)
+    end_user = db.query(AppUser).filter(AppUser.id == order.end_user_id).first()
+    if end_user:
+        try:
+            send_email(
+                to=end_user.email,
+                subject=f"Pedido atualizado: {label}",
+                html_body=f"<p>Seu pedido em <b>{app.name}</b> agora está: <b>{label}</b>.</p>",
+            )
+        except Exception:
+            logger.exception("Falha ao enviar e-mail de status pro cliente %s", end_user.email)
+    try:
+        send_push_to_end_user(app.id, order.end_user_id, f"Pedido {label}", f"Seu pedido em {app.name} agora está {label.lower()}.", db)
+    except Exception:
+        logger.exception("Falha ao enviar push de status pro end_user %s", order.end_user_id)
+
+
 @router.put("/orders/{order_id}", response_model=OrderResponse)
 async def update_order(
     app_id: int,
@@ -254,6 +279,8 @@ async def update_order(
     order.status = order_update.status
     db.commit()
     db.refresh(order)
+
+    _notify_customer_status_change(app, order, db)
     return order
 
 

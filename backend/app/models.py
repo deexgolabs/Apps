@@ -100,6 +100,7 @@ class PushSubscription(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=True)
     endpoint = Column(String, unique=True, nullable=False)
     p256dh = Column(String, nullable=False)
     auth = Column(String, nullable=False)
