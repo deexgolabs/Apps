@@ -301,6 +301,7 @@ class OrderUpdate(BaseModel):
 class OrderItemResponse(BaseModel):
     id: int
     module_item_id: Optional[int] = None
+    item_variation_id: Optional[int] = None
     name: str
     unit_price: float
     quantity: int
@@ -318,6 +319,10 @@ class OrderResponse(BaseModel):
     data: dict
     amount: Optional[float] = None
     subtotal: Optional[float] = None
+    delivery_fee: Optional[float] = None
+    discount_amount: Optional[float] = None
+    coupon_code: Optional[str] = None
+    fulfillment_type: Optional[str] = None
     payment_method: Optional[str] = None
     payment_reference: Optional[str] = None
     status: str
@@ -331,12 +336,63 @@ class OrderResponse(BaseModel):
 
 class CartItemInput(BaseModel):
     item_id: int
+    variation_id: Optional[int] = None
     quantity: int = 1
 
 
 class CartCheckoutRequest(BaseModel):
     items: List[CartItemInput]
     customer: dict = {}
+    coupon_code: Optional[str] = None
+    fulfillment_type: str = "delivery"
+    cep: Optional[str] = None
+
+
+class CouponCreate(BaseModel):
+    code: str
+    discount_type: str = "percent"  # percent | fixed
+    discount_value: float
+    min_order_value: Optional[float] = None
+    max_uses: Optional[int] = None
+    active: bool = True
+    expires_at: Optional[datetime] = None
+
+
+class CouponUpdate(BaseModel):
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = None
+    min_order_value: Optional[float] = None
+    max_uses: Optional[int] = None
+    active: Optional[bool] = None
+    expires_at: Optional[datetime] = None
+
+
+class CouponResponse(BaseModel):
+    id: int
+    app_id: int
+    code: str
+    discount_type: str
+    discount_value: float
+    min_order_value: Optional[float] = None
+    max_uses: Optional[int] = None
+    uses_count: int
+    active: bool
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CouponValidateRequest(BaseModel):
+    code: str
+    subtotal: float
+
+
+class CouponValidateResponse(BaseModel):
+    valid: bool
+    discount_amount: float = 0
+    reason: Optional[str] = None
 
 
 # ===== CATEGORY / ITEM SCHEMAS =====

@@ -79,6 +79,7 @@ export interface ModuleItem {
 export interface OrderItem {
   id: number
   module_item_id: number | null
+  item_variation_id: number | null
   name: string
   unit_price: number
   quantity: number
@@ -93,6 +94,10 @@ export interface Order {
   data: Record<string, any>
   amount: number | null
   subtotal: number | null
+  delivery_fee: number | null
+  discount_amount: number | null
+  coupon_code: string | null
+  fulfillment_type: string | null
   payment_method: string | null
   payment_reference: string | null
   status: string

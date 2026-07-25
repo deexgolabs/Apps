@@ -12,6 +12,7 @@ import AddModulePanel from '@/components/AddModulePanel'
 import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
 import OrdersList from '@/components/OrdersList'
+import CouponsManager from '@/components/CouponsManager'
 import PushComposer from '@/components/PushComposer'
 import PushHistory from '@/components/PushHistory'
 import ImageUploadField from '@/components/ImageUploadField'
@@ -336,7 +337,10 @@ export default function AppEditorPage({ params }: PageProps) {
             )}
 
             {activeTab === 'pedidos' && (
-              <OrdersList appId={id} />
+              <div className="space-y-4">
+                <CouponsManager appId={id} />
+                <OrdersList appId={id} />
+              </div>
             )}
 
             {activeTab === 'notificacoes' && (

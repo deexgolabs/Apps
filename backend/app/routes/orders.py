@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,9 +8,11 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.email_utils import send_email
-from app.models import App, AppUser, ModuleItem, Order, OrderItem, User
+from app.models import App, AppConfig, AppUser, ItemVariation, Module, ModuleItem, Order, OrderItem, User
 from app.public_utils import get_published_app
+from app.routes.coupons import validate_coupon
 from app.schemas import CartCheckoutRequest, OrderCreate, OrderResponse, OrderUpdate
+from app.utils import compute_frete, is_within_operating_hours
 
 router = APIRouter(prefix="/api/apps/{app_id}", tags=["orders"])
 logger = logging.getLogger("app.orders")
@@ -30,6 +33,16 @@ def _notify_owner_new_order(app: App, order: Order, db: Session) -> None:
         )
     except Exception:
         logger.exception("Falha ao enviar e-mail de novo pedido para %s", owner.email)
+
+
+def _get_module_settings(app_id: int, module_name: str, db: Session) -> dict:
+    row = (
+        db.query(AppConfig)
+        .join(Module, AppConfig.module_id == Module.id)
+        .filter(AppConfig.app_id == app_id, Module.name == module_name)
+        .first()
+    )
+    return row.settings if row and row.settings else {}
 
 
 @router.post("/modules/{module_name}/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -81,7 +94,7 @@ async def create_cart_checkout(
 
     order_items: List[OrderItem] = []
     subtotal = 0.0
-    items_to_decrement: List[tuple[ModuleItem, int]] = []
+    items_to_decrement: List[tuple] = []
 
     for cart_item in payload.items:
         if cart_item.quantity < 1:
@@ -99,34 +112,86 @@ async def create_cart_checkout(
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {cart_item.item_id} não encontrado")
 
-        if item.stock is not None and item.stock < cart_item.quantity:
+        variation = None
+        if cart_item.variation_id is not None:
+            variation = (
+                db.query(ItemVariation)
+                .filter(ItemVariation.id == cart_item.variation_id, ItemVariation.item_id == item.id)
+                .first()
+            )
+            if not variation:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Variação {cart_item.variation_id} não encontrada",
+                )
+
+        stocked_entity = variation or item
+        item_name = f"{item.name} ({variation.name})" if variation else item.name
+        if stocked_entity.stock is not None and stocked_entity.stock < cart_item.quantity:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Estoque insuficiente para '{item.name}' (disponível: {item.stock})",
+                detail=f"Estoque insuficiente para '{item_name}' (disponível: {stocked_entity.stock})",
             )
 
-        unit_price = item.price or 0.0
+        unit_price = (variation.price if variation else item.price) or 0.0
         item_subtotal = unit_price * cart_item.quantity
         subtotal += item_subtotal
         order_items.append(
             OrderItem(
                 module_item_id=item.id,
-                name=item.name,
+                item_variation_id=variation.id if variation else None,
+                name=item_name,
                 unit_price=unit_price,
                 quantity=cart_item.quantity,
                 subtotal=item_subtotal,
             )
         )
-        if item.stock is not None:
-            items_to_decrement.append((item, cart_item.quantity))
+        if stocked_entity.stock is not None:
+            items_to_decrement.append((stocked_entity, cart_item.quantity))
+
+    entrega_settings = _get_module_settings(app_id, "pagamento_entrega", db)
+
+    valor_minimo = entrega_settings.get("valor_minimo_pedido")
+    if valor_minimo:
+        try:
+            if subtotal < float(valor_minimo):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Pedido mínimo de R$ {float(valor_minimo):.2f}",
+                )
+        except ValueError:
+            pass
+
+    horario_funcionamento = entrega_settings.get("horario_funcionamento")
+    if horario_funcionamento and not is_within_operating_hours(horario_funcionamento, datetime.now(timezone.utc)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Fora do horário de funcionamento")
+
+    delivery_fee = 0.0
+    if payload.fulfillment_type == "delivery":
+        frete_settings = _get_module_settings(app_id, "calculo_frete", db)
+        delivery_fee = compute_frete(frete_settings.get("regras", ""), payload.cep)
+
+    discount_amount = 0.0
+    coupon = None
+    coupon_code = payload.coupon_code.strip().upper() if payload.coupon_code else None
+    if coupon_code:
+        coupon, discount_amount, reason = validate_coupon(app_id, coupon_code, subtotal, db)
+        if not coupon:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=reason or "Cupom inválido")
+
+    total = subtotal + delivery_fee - discount_amount
 
     order = Order(
         app_id=app_id,
         module_name=module_name,
         end_user_id=end_user.id if end_user else None,
         data=payload.customer,
-        amount=subtotal,
+        amount=total,
         subtotal=subtotal,
+        delivery_fee=delivery_fee,
+        discount_amount=discount_amount,
+        coupon_code=coupon.code if coupon else None,
+        fulfillment_type=payload.fulfillment_type,
         status="pending",
     )
     db.add(order)
@@ -138,6 +203,9 @@ async def create_cart_checkout(
 
     for item, qty in items_to_decrement:
         item.stock -= qty
+
+    if coupon:
+        coupon.uses_count += 1
 
     db.commit()
     db.refresh(order)

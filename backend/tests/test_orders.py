@@ -1,4 +1,4 @@
-from app.models import Order, OrderItem, ModuleItem
+from app.models import Order, OrderItem, ModuleItem, ItemVariation
 
 
 def _published_app(client, register_user, email="orders@example.com"):
@@ -139,6 +139,43 @@ def test_cart_checkout_creates_order_items_and_decrements_stock(client, register
     assert tracked_item.stock == 3
     untracked_item = db_session.query(ModuleItem).filter(ModuleItem.id == unlimited_id).first()
     assert untracked_item.stock is None
+
+
+def test_cart_checkout_uses_variation_price_and_stock(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "cartvariation@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Coxinha", price=8.0, stock=1)
+
+    variation = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/items/{item_id}/variations",
+        json={"name": "Grande", "price": 12.0, "stock": 5},
+        headers=owner_headers,
+    )
+    assert variation.status_code == 201
+    variation_id = variation.json()["id"]
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "variation_id": variation_id, "quantity": 2}],
+            "customer": {"nome": "Cliente"},
+        },
+    )
+    assert response.status_code == 201
+    body = response.json()
+    # preço vem da variação (12.0), não do item base (8.0); estoque checado é o
+    # da variação (5), não o do item base (1) — item base ficaria sem estoque
+    # suficiente se o backend confundisse os dois.
+    assert body["subtotal"] == 12.0 * 2
+    assert body["items"][0]["name"] == "Coxinha (Grande)"
+
+    order_item = db_session.query(OrderItem).filter(OrderItem.order_id == body["id"]).first()
+    assert order_item.item_variation_id == variation_id
+
+    base_item = db_session.query(ModuleItem).filter(ModuleItem.id == item_id).first()
+    assert base_item.stock == 1  # não decrementado — quem decrementa é a variação
+
+    variation_row = db_session.query(ItemVariation).filter(ItemVariation.id == variation_id).first()
+    assert variation_row.stock == 3  # 5 - 2
 
 
 def test_cart_checkout_rejects_when_stock_insufficient(client, register_user, db_session):

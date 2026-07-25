@@ -17,6 +17,7 @@ def get_plan_limits(plan_name: str, db: Session) -> dict:
         "items": config.max_items,
         "categories": config.max_categories,
         "push_sends_per_month": config.max_push_sends_per_month,
+        "coupons": config.max_coupons,
     }
 
 

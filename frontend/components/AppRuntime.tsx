@@ -38,6 +38,8 @@ import CartButton from '@/components/CartButton'
 import CartDrawer from '@/components/CartDrawer'
 import VariationPicker from '@/components/VariationPicker'
 import ItemReviews from '@/components/ItemReviews'
+import { parseFreteRules } from '@/lib/frete'
+import OperatingHoursBadge from '@/components/OperatingHoursBadge'
 
 export type RuntimeMode = 'owner' | 'public'
 
@@ -267,12 +269,14 @@ function ListModuleContent({
   moduleName,
   layout,
   cartEnabled,
+  horarioFuncionamento,
 }: {
   mode: RuntimeMode
   appId: string
   moduleName: string
   layout: 'list' | 'grid'
   cartEnabled?: boolean
+  horarioFuncionamento?: string
 }) {
   const cart = useOptionalCart()
   const [items, setItems] = useState<ModuleItem[]>([])
@@ -344,6 +348,7 @@ function ListModuleContent({
           const variation = item.variations.find((v) => v.id === selectedVariation[item.id])
           cart.addItem(moduleName, {
             id: item.id,
+            variation_id: variation ? variation.id : null,
             name: variation ? `${item.name} (${variation.name})` : item.name,
             price: effectivePrice(item),
             image_url: item.image_url,
@@ -482,28 +487,31 @@ function ListModuleContent({
     )
 
   const searchBar = searchEnabled && (
-    <div className="flex gap-2 mb-3">
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Buscar..."
-        className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5"
-      />
-      {supportsCategories && categories.length > 0 && (
-        <select
-          value={categoryFilter ?? ''}
-          onChange={(e) => setCategoryFilter(e.target.value ? Number(e.target.value) : null)}
-          className="text-sm border border-gray-300 rounded px-2 py-1.5"
-        >
-          <option value="">Todas categorias</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      )}
+    <div className="mb-3">
+      {horarioFuncionamento && <OperatingHoursBadge horarioFuncionamento={horarioFuncionamento} />}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar..."
+          className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5"
+        />
+        {supportsCategories && categories.length > 0 && (
+          <select
+            value={categoryFilter ?? ''}
+            onChange={(e) => setCategoryFilter(e.target.value ? Number(e.target.value) : null)}
+            className="text-sm border border-gray-300 rounded px-2 py-1.5"
+          >
+            <option value="">Todas categorias</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
     </div>
   )
 
@@ -718,15 +726,7 @@ function DynamicFormModuleContent({
 function FreteCalculator({ settings }: { settings: Record<string, any> | undefined }) {
   const [cep, setCep] = useState('')
 
-  const rules: { prefix: string; price: number }[] = (settings?.regras || '')
-    .split('\n')
-    .map((line: string) => line.trim())
-    .filter(Boolean)
-    .map((line: string) => {
-      const [prefix, price] = line.split(':')
-      return { prefix: (prefix || '').trim(), price: parseFloat(price) }
-    })
-    .filter((r: { prefix: string; price: number }) => r.prefix && !isNaN(r.price))
+  const rules = parseFreteRules(settings?.regras || '')
 
   if (rules.length === 0) {
     return (
@@ -1331,6 +1331,7 @@ export default function AppRuntime({
                 moduleName={selectedModule}
                 layout={configs[selectedModule]?.layout === 'grid' ? 'grid' : 'list'}
                 cartEnabled={mode === 'public' && CART_ENABLED_MODULES.includes(selectedModule)}
+                horarioFuncionamento={configs['pagamento_entrega']?.horario_funcionamento}
               />
             ) : FIXED_FORM_MODULES.includes(selectedModule) ? (
               <FormModuleContent appId={appId} moduleName={selectedModule} />
@@ -1433,7 +1434,12 @@ export default function AppRuntime({
       {mode === 'public' && (
         <>
           <CartButton onClick={() => setCartOpen(true)} color={primaryColor} />
-          <CartDrawer appId={appId} open={cartOpen} onClose={() => setCartOpen(false)} />
+          <CartDrawer
+            appId={appId}
+            open={cartOpen}
+            onClose={() => setCartOpen(false)}
+            freteRegras={configs['calculo_frete']?.regras}
+          />
         </>
       )}
     </div>

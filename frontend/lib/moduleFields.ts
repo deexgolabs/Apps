@@ -84,6 +84,15 @@ export const MODULE_FIELDS: Record<string, ModuleField[]> = {
       type: 'textarea',
       placeholder: 'Aceitamos dinheiro, cartão e Pix na entrega',
     },
+    { key: 'valor_minimo_pedido', label: 'Valor mínimo do pedido (R$, opcional)', type: 'text' },
+    { key: 'raio_entrega_km', label: 'Raio de entrega (km, opcional — só informativo)', type: 'text' },
+    {
+      key: 'horario_funcionamento',
+      label: 'Horário de funcionamento (dia:abre-fecha, um por linha)',
+      type: 'textarea',
+      placeholder: 'seg-sex:08:00-18:00\nsab:08:00-12:00',
+    },
+    { key: 'tempo_estimado_min', label: 'Tempo estimado de preparo (min, opcional)', type: 'text' },
   ],
 }
 

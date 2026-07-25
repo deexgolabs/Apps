@@ -7,6 +7,7 @@ import type { OrderItem } from '@/types'
 
 export interface CartItem {
   item_id: number
+  variation_id: number | null
   module_name: string
   name: string
   unit_price: number
@@ -19,10 +20,17 @@ interface CartContextValue {
   items: CartItem[]
   addItem: (
     moduleName: string,
-    item: { id: number; name: string; price: number | null; image_url: string | null; stock: number | null }
+    item: {
+      id: number
+      variation_id?: number | null
+      name: string
+      price: number | null
+      image_url: string | null
+      stock: number | null
+    }
   ) => void
-  removeItem: (itemId: number) => void
-  setQuantity: (itemId: number, quantity: number) => void
+  removeItem: (itemId: number, variationId?: number | null) => void
+  setQuantity: (itemId: number, quantity: number, variationId?: number | null) => void
   clear: () => void
   subtotal: number
   count: number
@@ -55,19 +63,23 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
   }, [appId, items])
 
   const addItem: CartContextValue['addItem'] = (moduleName, item) => {
+    const variationId = item.variation_id ?? null
     setItems((prev) => {
       if (prev.length > 0 && prev[0].module_name !== moduleName) {
         toast.error('Finalize ou limpe o carrinho atual antes de adicionar itens de outro módulo.')
         return prev
       }
-      const existing = prev.find((i) => i.item_id === item.id)
+      const existing = prev.find((i) => i.item_id === item.id && i.variation_id === variationId)
       if (existing) {
-        return prev.map((i) => (i.item_id === item.id ? { ...i, quantity: i.quantity + 1 } : i))
+        return prev.map((i) =>
+          i.item_id === item.id && i.variation_id === variationId ? { ...i, quantity: i.quantity + 1 } : i
+        )
       }
       return [
         ...prev,
         {
           item_id: item.id,
+          variation_id: variationId,
           module_name: moduleName,
           name: item.name,
           unit_price: item.price || 0,
@@ -79,16 +91,18 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
     })
   }
 
-  const removeItem = (itemId: number) => {
-    setItems((prev) => prev.filter((i) => i.item_id !== itemId))
+  const removeItem = (itemId: number, variationId: number | null = null) => {
+    setItems((prev) => prev.filter((i) => !(i.item_id === itemId && i.variation_id === variationId)))
   }
 
-  const setQuantity = (itemId: number, quantity: number) => {
+  const setQuantity = (itemId: number, quantity: number, variationId: number | null = null) => {
     if (quantity < 1) {
-      removeItem(itemId)
+      removeItem(itemId, variationId)
       return
     }
-    setItems((prev) => prev.map((i) => (i.item_id === itemId ? { ...i, quantity } : i)))
+    setItems((prev) =>
+      prev.map((i) => (i.item_id === itemId && i.variation_id === variationId ? { ...i, quantity } : i))
+    )
   }
 
   const clear = () => setItems([])
@@ -105,6 +119,7 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
         if (!current) continue
         restored.push({
           item_id: current.id,
+          variation_id: oi.item_variation_id ?? null,
           module_name: moduleName,
           name: current.name,
           unit_price: current.price || 0,

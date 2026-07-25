@@ -37,6 +37,7 @@ def seed_plan_configs() -> None:
                 max_items=limits["items"],
                 max_categories=limits["categories"],
                 max_push_sends_per_month=limits["push_sends_per_month"],
+                max_coupons=limits["coupons"],
             ))
         db.commit()
     finally:

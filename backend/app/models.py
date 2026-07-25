@@ -131,6 +131,10 @@ class Order(Base):
     data = Column(JSON, default=dict)
     amount = Column(Float, nullable=True)
     subtotal = Column(Float, nullable=True)  # soma dos OrderItem, antes de frete/desconto
+    delivery_fee = Column(Float, nullable=True, default=0)
+    discount_amount = Column(Float, nullable=True, default=0)
+    coupon_code = Column(String, nullable=True)
+    fulfillment_type = Column(String, nullable=True, default="delivery")  # delivery | pickup | dine_in
     payment_method = Column(String, nullable=True)
     payment_reference = Column(String, nullable=True)
     status = Column(String, default="pending")  # pending, confirmed, preparing, completed, cancelled
@@ -170,6 +174,24 @@ class PlanConfig(Base):
     max_items = Column(Integer, default=10)
     max_categories = Column(Integer, default=5)
     max_push_sends_per_month = Column(Integer, default=0)
+    max_coupons = Column(Integer, default=0)
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    __table_args__ = (UniqueConstraint("app_id", "code", name="uq_coupons_app_id_code"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    code = Column(String, nullable=False)  # sempre armazenado em maiúsculas
+    discount_type = Column(String, nullable=False, default="percent")  # percent | fixed
+    discount_value = Column(Float, nullable=False)
+    min_order_value = Column(Float, nullable=True)
+    max_uses = Column(Integer, nullable=True)
+    uses_count = Column(Integer, nullable=False, default=0)
+    active = Column(Boolean, default=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
 class AdminAuditLog(Base):

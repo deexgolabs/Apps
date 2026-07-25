@@ -88,6 +88,19 @@ export default function OrdersList({ appId, moduleName }: { appId: string; modul
               </tbody>
             </table>
           )}
+          {(order.fulfillment_type || order.coupon_code) && (
+            <p className="text-xs text-gray-500">
+              {order.fulfillment_type === 'pickup' ? '🏠 Retirada no local' : order.fulfillment_type === 'delivery' ? '🚚 Entrega' : null}
+              {order.coupon_code && <span className="ml-2">🏷️ Cupom: {order.coupon_code}</span>}
+            </p>
+          )}
+          {order.subtotal != null && (order.delivery_fee || order.discount_amount) ? (
+            <div className="text-xs text-gray-500 space-y-0.5">
+              <p>Subtotal: R$ {order.subtotal.toFixed(2)}</p>
+              {!!order.delivery_fee && <p>Frete: R$ {order.delivery_fee.toFixed(2)}</p>}
+              {!!order.discount_amount && <p>Desconto: -R$ {order.discount_amount.toFixed(2)}</p>}
+            </div>
+          ) : null}
           {order.amount != null && (
             <p className="text-gray-700 font-medium">Total: R$ {order.amount.toFixed(2)}</p>
           )}

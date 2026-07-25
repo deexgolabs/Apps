@@ -1,7 +1,7 @@
 PLAN_LIMITS = {
-    "free": {"apps": 1, "modules": 5, "items": 10, "categories": 5, "push_sends_per_month": 0},
-    "pro": {"apps": 3, "modules": 10, "items": 100, "categories": 50, "push_sends_per_month": 5},
-    "business": {"apps": 10, "modules": 100, "items": 10000, "categories": 150, "push_sends_per_month": 100},
+    "free": {"apps": 1, "modules": 5, "items": 10, "categories": 5, "push_sends_per_month": 0, "coupons": 0},
+    "pro": {"apps": 3, "modules": 10, "items": 100, "categories": 50, "push_sends_per_month": 5, "coupons": 10},
+    "business": {"apps": 10, "modules": 100, "items": 10000, "categories": 150, "push_sends_per_month": 100, "coupons": 999999},
 }
 
 PLAN_PRICES = {

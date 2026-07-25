@@ -46,6 +46,7 @@ def _setup_database():
                 max_items=limits["items"],
                 max_categories=limits["categories"],
                 max_push_sends_per_month=limits["push_sends_per_month"],
+                max_coupons=limits["coupons"],
             ))
         session.commit()
     finally:
