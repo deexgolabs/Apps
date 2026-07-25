@@ -22,17 +22,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     theme_color: config.primary_color || '#4F46E5',
   }
 
-  if (config.icon_url) {
-    // Não há pipeline de redimensionamento de imagem no projeto — declaramos vários
-    // tamanhos apontando para a mesma URL (o navegador reamostra a partir dela) em vez
-    // de gerar assets realmente redimensionados. Resolve a maioria dos casos de
-    // instalação de PWA sem exigir upload de múltiplos arquivos.
-    const sizes = ['72x72', '96x96', '128x128', '144x144', '152x152', '192x192', '384x384', '512x512']
-    manifest.icons = [
-      ...sizes.map((size) => ({ src: config.icon_url, sizes: size, type: 'image/png', purpose: 'any' })),
-      { src: config.icon_url, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-    ]
-  }
+  // Sem ícone configurado, cai pro ícone genérico da plataforma — Chrome exige
+  // `icons` no manifest pra considerar o app instalável, então sem isso o botão
+  // de instalar nunca apareceria pros apps que ainda não subiram um ícone.
+  const iconSrc = config.icon_url || `${new URL(request.url).origin}/default-app-icon.png`
+
+  // Não há pipeline de redimensionamento de imagem no projeto — declaramos vários
+  // tamanhos apontando para a mesma URL (o navegador reamostra a partir dela) em vez
+  // de gerar assets realmente redimensionados. Resolve a maioria dos casos de
+  // instalação de PWA sem exigir upload de múltiplos arquivos.
+  const sizes = ['72x72', '96x96', '128x128', '144x144', '152x152', '192x192', '384x384', '512x512']
+  manifest.icons = [
+    ...sizes.map((size) => ({ src: iconSrc, sizes: size, type: 'image/png', purpose: 'any' })),
+    { src: iconSrc, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  ]
 
   return NextResponse.json(manifest, {
     headers: { 'Content-Type': 'application/manifest+json' },

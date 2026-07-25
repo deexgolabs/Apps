@@ -40,6 +40,7 @@ import VariationPicker from '@/components/VariationPicker'
 import ItemReviews from '@/components/ItemReviews'
 import { parseFreteRules } from '@/lib/frete'
 import OperatingHoursBadge from '@/components/OperatingHoursBadge'
+import InstallPwaButton from '@/components/InstallPwaButton'
 
 export type RuntimeMode = 'owner' | 'public'
 
@@ -1329,7 +1330,7 @@ export default function AppRuntime({
         ) : (
           <span className="text-white text-sm font-semibold truncate">{appName}</span>
         )}
-        <span className="w-4" />
+        {mode === 'public' ? <InstallPwaButton /> : <span className="w-4" />}
       </div>
 
       {isHomeScreen && homeImageUrl && (

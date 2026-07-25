@@ -44,7 +44,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400 text-sm">
+      <div className="min-h-dvh w-full flex items-center justify-center text-gray-400 text-sm md:max-w-md md:mx-auto">
         Carregando...
       </div>
     )
@@ -52,7 +52,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
 
   if (notFound || !app) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-center px-4">
+      <div className="min-h-dvh w-full flex items-center justify-center text-center px-4 md:max-w-md md:mx-auto">
         <p className="text-gray-500 text-sm">
           Este aplicativo não existe ou ainda não foi publicado.
         </p>
@@ -63,7 +63,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
   const config = app.config || {}
 
   return (
-    <div className="min-h-screen bg-gray-50 relative md:max-w-md md:mx-auto md:shadow-xl">
+    <div className="min-h-dvh w-full bg-gray-50 relative md:max-w-md md:mx-auto md:shadow-xl">
       <AppRuntime
         mode="public"
         appId={appId}
