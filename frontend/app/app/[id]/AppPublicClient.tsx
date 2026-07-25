@@ -63,7 +63,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
   const config = app.config || {}
 
   return (
-    <div className="min-h-screen bg-gray-50 relative max-w-md mx-auto shadow-xl">
+    <div className="min-h-screen bg-gray-50 relative md:max-w-md md:mx-auto md:shadow-xl">
       <AppRuntime
         mode="public"
         appId={appId}
