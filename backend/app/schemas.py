@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from typing import Optional, List
 
@@ -380,6 +380,50 @@ class ItemUpdate(BaseModel):
     stock: Optional[int] = None
 
 
+class VariationCreate(BaseModel):
+    name: str
+    price: float
+    stock: Optional[int] = None
+    order: int = 0
+
+
+class VariationUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    stock: Optional[int] = None
+    order: Optional[int] = None
+
+
+class VariationResponse(BaseModel):
+    id: int
+    item_id: int
+    name: str
+    price: float
+    stock: Optional[int] = None
+    order: int
+
+    class Config:
+        from_attributes = True
+
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    comment: Optional[str] = None
+
+
+class ReviewResponse(BaseModel):
+    id: int
+    item_id: int
+    end_user_id: int
+    end_user_name: str
+    rating: int
+    comment: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ItemResponse(BaseModel):
     id: int
     app_id: int
@@ -392,6 +436,9 @@ class ItemResponse(BaseModel):
     extra: dict
     order: int
     stock: Optional[int] = None
+    variations: List[VariationResponse] = []
+    avg_rating: Optional[float] = None
+    review_count: int = 0
 
     class Config:
         from_attributes = True

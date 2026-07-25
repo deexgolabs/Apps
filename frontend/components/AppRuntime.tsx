@@ -36,6 +36,8 @@ import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
 import { CartProvider, useOptionalCart } from '@/context/CartContext'
 import CartButton from '@/components/CartButton'
 import CartDrawer from '@/components/CartDrawer'
+import VariationPicker from '@/components/VariationPicker'
+import ItemReviews from '@/components/ItemReviews'
 
 export type RuntimeMode = 'owner' | 'public'
 
@@ -276,7 +278,12 @@ function ListModuleContent({
   const [items, setItems] = useState<ModuleItem[]>([])
   const [categories, setCategories] = useState<ModuleCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [selectedVariation, setSelectedVariation] = useState<Record<number, number>>({})
   const supportsCategories = LIST_MODULES[moduleName]
+  const searchEnabled = cartEnabled && mode === 'public'
 
   useEffect(() => {
     const fetchData = async () => {
@@ -287,7 +294,10 @@ function ListModuleContent({
           mode === 'owner'
             ? `/api/apps/${appId}/modules/${moduleName}`
             : `/api/apps/${appId}/public/modules/${moduleName}`
-        const itemsPromise = client.get<ModuleItem[]>(`${base}/items`)
+        const params = searchEnabled
+          ? { q: search || undefined, category_id: categoryFilter ?? undefined }
+          : undefined
+        const itemsPromise = client.get<ModuleItem[]>(`${base}/items`, { params })
         const categoriesPromise = supportsCategories
           ? client.get<ModuleCategory[]>(`${base}/categories`)
           : Promise.resolve(null)
@@ -299,62 +309,126 @@ function ListModuleContent({
         setLoading(false)
       }
     }
-    fetchData()
-  }, [mode, appId, moduleName, supportsCategories])
-
-  if (loading) {
-    return (
-      <div className="space-y-3">
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-      </div>
-    )
-  }
-  if (items.length === 0) {
-    return (
-      <p className="text-sm text-gray-400 italic text-center mt-8">
-        Este módulo ainda não foi configurado.
-      </p>
-    )
-  }
+    const timeout = setTimeout(fetchData, searchEnabled ? 300 : 0)
+    return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, appId, moduleName, supportsCategories, search, categoryFilter])
 
   const isAgenda = moduleName === 'agenda_interna'
   const isGrid = layout === 'grid'
 
-  const outOfStock = (item: ModuleItem) => item.stock !== null && item.stock <= 0
+  const outOfStock = (item: ModuleItem) => {
+    if (item.variations.length > 0) {
+      const v = item.variations.find((v) => v.id === selectedVariation[item.id])
+      return v ? v.stock !== null && v.stock <= 0 : item.variations.every((v) => v.stock !== null && v.stock <= 0)
+    }
+    return item.stock !== null && item.stock <= 0
+  }
 
-  const addToCartButton = (item: ModuleItem) =>
-    cartEnabled && cart && (
+  const effectivePrice = (item: ModuleItem) => {
+    if (item.variations.length > 0) {
+      const v = item.variations.find((v) => v.id === selectedVariation[item.id])
+      return v ? v.price : item.variations[0]?.price ?? item.price
+    }
+    return item.extra?.promo_price ?? item.price
+  }
+
+  const addToCartButton = (item: ModuleItem) => {
+    if (!cartEnabled || !cart) return null
+    const needsVariation = item.variations.length > 0 && !selectedVariation[item.id]
+    return (
       <button
         type="button"
-        disabled={outOfStock(item)}
-        onClick={() => cart.addItem(moduleName, item)}
+        disabled={outOfStock(item) || needsVariation}
+        onClick={() => {
+          const variation = item.variations.find((v) => v.id === selectedVariation[item.id])
+          cart.addItem(moduleName, {
+            id: item.id,
+            name: variation ? `${item.name} (${variation.name})` : item.name,
+            price: effectivePrice(item),
+            image_url: item.image_url,
+            stock: variation ? variation.stock : item.stock,
+          })
+        }}
+        title={needsVariation ? 'Escolha uma variação' : undefined}
         className="shrink-0 text-xs font-semibold px-2 py-1 rounded bg-indigo-600 text-white disabled:opacity-40 disabled:bg-gray-400"
       >
         {outOfStock(item) ? 'Esgotado' : '+ Adicionar'}
       </button>
     )
+  }
+
+  const priceDisplay = (item: ModuleItem) => {
+    const promo = item.extra?.promo_price
+    if (item.variations.length > 0) {
+      const minPrice = Math.min(...item.variations.map((v) => v.price))
+      return <span className="text-gray-500 font-normal"> · a partir de R$ {minPrice.toFixed(2)}</span>
+    }
+    if (promo != null && item.price != null) {
+      return (
+        <span className="font-normal">
+          {' '}
+          · <span className="line-through text-gray-400">R$ {item.price.toFixed(2)}</span>{' '}
+          <span className="text-red-600 font-semibold">R$ {Number(promo).toFixed(2)}</span>
+        </span>
+      )
+    }
+    if (item.price != null) return <span className="text-gray-500 font-normal"> · R$ {item.price.toFixed(2)}</span>
+    return null
+  }
+
+  const expandedPanel = (item: ModuleItem) =>
+    expandedId === item.id && (
+      <div className="px-2 pb-2 space-y-2" onClick={(e) => e.stopPropagation()}>
+        {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
+        {item.extra?.gallery?.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto">
+            {item.extra.gallery.map((url: string, i: number) => (
+              <img key={i} src={url} alt="" className="w-14 h-14 object-cover rounded flex-shrink-0" />
+            ))}
+          </div>
+        )}
+        {item.variations.length > 0 && (
+          <VariationPicker
+            variations={item.variations}
+            selectedId={selectedVariation[item.id] ?? null}
+            onSelect={(v) => setSelectedVariation((prev) => ({ ...prev, [item.id]: v.id }))}
+          />
+        )}
+        {mode === 'public' && <ItemReviews appId={appId} moduleName={moduleName} itemId={item.id} />}
+      </div>
+    )
 
   const renderItem = (item: ModuleItem) => (
-    <div key={item.id} className="flex items-center gap-2 border-b border-gray-100 pb-2">
-      {item.image_url && (
-        <img src={item.image_url} alt="" className="w-10 h-10 object-cover rounded flex-shrink-0" />
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-gray-900 truncate">
-          {item.name}
-          {item.price != null && <span className="text-gray-500 font-normal"> · R$ {item.price.toFixed(2)}</span>}
-          {isAgenda && (item.extra?.data || item.extra?.hora) && (
-            <span className="text-gray-500 font-normal">
-              {' '}
-              · {item.extra?.data} {item.extra?.hora}
-            </span>
+    <div key={item.id} className="border-b border-gray-100 pb-2">
+      <div
+        className="flex items-center gap-2 cursor-pointer"
+        onClick={() => mode === 'public' && setExpandedId(expandedId === item.id ? null : item.id)}
+      >
+        {item.image_url && (
+          <img src={item.image_url} alt="" className="w-10 h-10 object-cover rounded flex-shrink-0" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-900 truncate">
+            {item.extra?.featured && <span className="text-amber-500 mr-1">★</span>}
+            {item.name}
+            {priceDisplay(item)}
+            {isAgenda && (item.extra?.data || item.extra?.hora) && (
+              <span className="text-gray-500 font-normal">
+                {' '}
+                · {item.extra?.data} {item.extra?.hora}
+              </span>
+            )}
+          </p>
+          {item.avg_rating != null && (
+            <p className="text-[11px] text-amber-500">
+              {'★'.repeat(Math.round(item.avg_rating))} ({item.review_count})
+            </p>
           )}
-        </p>
-        {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
+        </div>
+        {addToCartButton(item)}
       </div>
-      {addToCartButton(item)}
+      {expandedPanel(item)}
     </div>
   )
 
@@ -363,24 +437,40 @@ function ListModuleContent({
   const renderCardItem = (item: ModuleItem) => (
     <div
       key={item.id}
-      className="break-inside-avoid mb-2 bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm"
+      className="break-inside-avoid mb-2 bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm relative"
     >
-      {item.image_url ? (
-        <img src={item.image_url} alt="" className="w-full h-24 object-cover" />
-      ) : (
-        <div className="w-full h-16 bg-gray-100 flex items-center justify-center text-gray-300 text-xs">
-          Sem imagem
-        </div>
+      {item.extra?.featured && (
+        <span className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded">
+          ★ Destaque
+        </span>
       )}
-      <div className="p-2">
-        <p className="text-xs font-medium text-gray-900 truncate">{item.name}</p>
-        {item.price != null && <p className="text-xs text-gray-500">R$ {item.price.toFixed(2)}</p>}
-        {isAgenda && (item.extra?.data || item.extra?.hora) && (
-          <p className="text-[11px] text-gray-500">{item.extra?.data} {item.extra?.hora}</p>
+      <div
+        className="cursor-pointer"
+        onClick={() => mode === 'public' && setExpandedId(expandedId === item.id ? null : item.id)}
+      >
+        {item.image_url ? (
+          <img src={item.image_url} alt="" className="w-full h-24 object-cover" />
+        ) : (
+          <div className="w-full h-16 bg-gray-100 flex items-center justify-center text-gray-300 text-xs">
+            Sem imagem
+          </div>
         )}
-        {item.description && <p className="text-[11px] text-gray-500 line-clamp-2">{item.description}</p>}
-        {cartEnabled && cart && <div className="mt-1.5">{addToCartButton(item)}</div>}
+        <div className="p-2">
+          <p className="text-xs font-medium text-gray-900 truncate">{item.name}</p>
+          <p className="text-xs">{priceDisplay(item)}</p>
+          {isAgenda && (item.extra?.data || item.extra?.hora) && (
+            <p className="text-[11px] text-gray-500">{item.extra?.data} {item.extra?.hora}</p>
+          )}
+          {item.avg_rating != null && (
+            <p className="text-[11px] text-amber-500">
+              {'★'.repeat(Math.round(item.avg_rating))} ({item.review_count})
+            </p>
+          )}
+          {item.description && <p className="text-[11px] text-gray-500 line-clamp-2">{item.description}</p>}
+        </div>
       </div>
+      <div className="px-2 pb-2">{cartEnabled && cart && addToCartButton(item)}</div>
+      {expandedPanel(item)}
     </div>
   )
 
@@ -391,13 +481,69 @@ function ListModuleContent({
       <div className="space-y-2">{list.map(renderItem)}</div>
     )
 
+  const searchBar = searchEnabled && (
+    <div className="flex gap-2 mb-3">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Buscar..."
+        className="flex-1 text-sm border border-gray-300 rounded px-2 py-1.5"
+      />
+      {supportsCategories && categories.length > 0 && (
+        <select
+          value={categoryFilter ?? ''}
+          onChange={(e) => setCategoryFilter(e.target.value ? Number(e.target.value) : null)}
+          className="text-sm border border-gray-300 rounded px-2 py-1.5"
+        >
+          <option value="">Todas categorias</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  )
+
+  if (loading) {
+    return (
+      <div>
+        {searchBar}
+        <div className="space-y-3">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      </div>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <div>
+        {searchBar}
+        <p className="text-sm text-gray-400 italic text-center mt-8">
+          {search || categoryFilter ? 'Nenhum item encontrado.' : 'Este módulo ainda não foi configurado.'}
+        </p>
+      </div>
+    )
+  }
+
   if (!supportsCategories) {
-    return itemsGrid(items)
+    return (
+      <div>
+        {searchBar}
+        {itemsGrid(items)}
+      </div>
+    )
   }
 
   const uncategorized = items.filter((i) => !i.category_id)
   return (
     <div className="space-y-4">
+      {searchBar}
       {categories.map((category) => {
         const categoryItems = items.filter((i) => i.category_id === category.id)
         if (categoryItems.length === 0) return null

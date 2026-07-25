@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.database import get_db
 from app.models import App, ModuleCategory, ModuleItem, User
 from app.schemas import CategoryCreate, CategoryResponse, ItemCreate, ItemUpdate, ItemResponse
 from app.dependencies import get_current_user
 from app.plan_limits import get_plan_limits
+from app.item_utils import attach_rating_aggregates
 
 router = APIRouter(prefix="/api/apps", tags=["module-items"])
 
@@ -91,16 +92,22 @@ async def delete_category(
 async def list_items(
     app_id: int,
     module_name: str,
+    q: Optional[str] = None,
+    category_id: Optional[int] = None,
+    featured_only: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     _get_owned_app(app_id, db, current_user)
-    return (
-        db.query(ModuleItem)
-        .filter(ModuleItem.app_id == app_id, ModuleItem.module_name == module_name)
-        .order_by(ModuleItem.order)
-        .all()
-    )
+    query = db.query(ModuleItem).filter(ModuleItem.app_id == app_id, ModuleItem.module_name == module_name)
+    if q:
+        query = query.filter(ModuleItem.name.ilike(f"%{q}%"))
+    if category_id is not None:
+        query = query.filter(ModuleItem.category_id == category_id)
+    if featured_only:
+        query = query.filter(ModuleItem.extra["featured"].astext == "true")
+    items = query.order_by(ModuleItem.order).all()
+    return attach_rating_aggregates(items, db)
 
 
 @router.post("/{app_id}/modules/{module_name}/items", response_model=ItemResponse, status_code=status.HTTP_201_CREATED)

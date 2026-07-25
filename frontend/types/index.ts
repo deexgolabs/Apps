@@ -40,6 +40,25 @@ export interface ModuleCategory {
   order: number
 }
 
+export interface ItemVariation {
+  id: number
+  item_id: number
+  name: string
+  price: number
+  stock: number | null
+  order: number
+}
+
+export interface ItemReview {
+  id: number
+  item_id: number
+  end_user_id: number
+  end_user_name: string
+  rating: number
+  comment: string | null
+  created_at: string
+}
+
 export interface ModuleItem {
   id: number
   app_id: number
@@ -52,6 +71,9 @@ export interface ModuleItem {
   extra: Record<string, any>
   order: number
   stock: number | null
+  variations: ItemVariation[]
+  avg_rating: number | null
+  review_count: number
 }
 
 export interface OrderItem {

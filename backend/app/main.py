@@ -8,7 +8,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.rate_limit import limiter
-from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth, orders
+from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth, orders, item_variations, reviews
 from app.seed import seed_modules, seed_plan_configs
 
 # Sem DSN (padrão), sentry_sdk.init vira um no-op — nada é enviado nem
@@ -59,6 +59,8 @@ app.include_router(uploads.router)
 app.include_router(mercado_livre.router)
 app.include_router(oauth.router)
 app.include_router(orders.router)
+app.include_router(item_variations.router)
+app.include_router(reviews.router)
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)

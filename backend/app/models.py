@@ -149,6 +149,7 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
     module_item_id = Column(Integer, ForeignKey("module_items.id"), nullable=True)
+    item_variation_id = Column(Integer, ForeignKey("item_variations.id"), nullable=True)
     name = Column(String, nullable=False)
     unit_price = Column(Float, nullable=False)
     quantity = Column(Integer, nullable=False, default=1)
@@ -196,3 +197,31 @@ class ModuleItem(Base):
     extra = Column(JSON, default=dict)
     order = Column(Integer, default=0)
     stock = Column(Integer, nullable=True)  # None = ilimitado/não rastreado
+
+    variations = relationship("ItemVariation", order_by="ItemVariation.order")
+
+
+class ItemVariation(Base):
+    """Variação de um item (tamanho, sabor, cor) com preço absoluto próprio —
+    quando um item tem variações, ModuleItem.price/stock viram só 'a partir de'
+    e o checkout passa a exigir variation_id."""
+    __tablename__ = "item_variations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("module_items.id"), nullable=False)
+    name = Column(String, nullable=False)
+    price = Column(Float, nullable=False)
+    stock = Column(Integer, nullable=True)
+    order = Column(Integer, default=0)
+
+
+class ItemReview(Base):
+    __tablename__ = "item_reviews"
+    __table_args__ = (UniqueConstraint("item_id", "end_user_id", name="uq_item_reviews_item_end_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    item_id = Column(Integer, ForeignKey("module_items.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=False)
+    rating = Column(Integer, nullable=False)
+    comment = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)

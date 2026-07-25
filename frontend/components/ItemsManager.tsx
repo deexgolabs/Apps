@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import api from '@/lib/api'
 import ImageUploadField from '@/components/ImageUploadField'
-import type { ModuleCategory, ModuleItem } from '@/types'
+import MultiImageUploadField from '@/components/MultiImageUploadField'
+import type { ItemVariation, ModuleCategory, ModuleItem } from '@/types'
 import toast from 'react-hot-toast'
 import { showApiError } from '@/lib/apiError'
 
@@ -29,6 +30,14 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const [itemStock, setItemStock] = useState('')
   const [itemData, setItemData] = useState('')
   const [itemHora, setItemHora] = useState('')
+  const [itemGallery, setItemGallery] = useState<string[]>([])
+  const [itemFeatured, setItemFeatured] = useState(false)
+  const [itemPromoPrice, setItemPromoPrice] = useState('')
+
+  const [variations, setVariations] = useState<ItemVariation[]>([])
+  const [variationName, setVariationName] = useState('')
+  const [variationPrice, setVariationPrice] = useState('')
+  const [variationStock, setVariationStock] = useState('')
 
   const base = `/api/apps/${appId}/modules/${moduleName}`
 
@@ -87,9 +96,16 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setItemStock('')
     setItemData('')
     setItemHora('')
+    setItemGallery([])
+    setItemFeatured(false)
+    setItemPromoPrice('')
+    setVariations([])
+    setVariationName('')
+    setVariationPrice('')
+    setVariationStock('')
   }
 
-  const startEditItem = (item: ModuleItem) => {
+  const startEditItem = async (item: ModuleItem) => {
     setEditingId(item.id)
     setItemName(item.name)
     setItemDescription(item.description || '')
@@ -99,11 +115,23 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setItemStock(item.stock != null ? String(item.stock) : '')
     setItemData(item.extra?.data || '')
     setItemHora(item.extra?.hora || '')
+    setItemGallery(item.extra?.gallery || [])
+    setItemFeatured(!!item.extra?.featured)
+    setItemPromoPrice(item.extra?.promo_price != null ? String(item.extra.promo_price) : '')
+    setVariations(item.variations || [])
   }
 
   const handleSubmitItem = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!itemName.trim()) return
+
+    const extra = isAgenda
+      ? { data: itemData, hora: itemHora }
+      : {
+          gallery: itemGallery,
+          featured: itemFeatured,
+          promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
+        }
 
     const payload = {
       name: itemName,
@@ -112,7 +140,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       image_url: isAgenda ? null : itemImageUrl || null,
       category_id: itemCategoryId ? Number(itemCategoryId) : null,
       stock: isAgenda ? null : itemStock.trim() ? parseInt(itemStock, 10) : null,
-      extra: isAgenda ? { data: itemData, hora: itemHora } : {},
+      extra,
     }
 
     try {
@@ -138,6 +166,35 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       if (editingId === itemId) resetItemForm()
     } catch (error) {
       toast.error('Erro ao remover item')
+    }
+  }
+
+  const handleAddVariation = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingId || !variationName.trim() || !variationPrice.trim()) return
+    try {
+      const response = await api.post(`${base}/items/${editingId}/variations`, {
+        name: variationName,
+        price: parseFloat(variationPrice),
+        stock: variationStock.trim() ? parseInt(variationStock, 10) : null,
+        order: variations.length,
+      })
+      setVariations([...variations, response.data])
+      setVariationName('')
+      setVariationPrice('')
+      setVariationStock('')
+    } catch (error: any) {
+      showApiError(error, 'Erro ao criar variação')
+    }
+  }
+
+  const handleRemoveVariation = async (variationId: number) => {
+    if (!editingId) return
+    try {
+      await api.delete(`${base}/items/${editingId}/variations/${variationId}`)
+      setVariations(variations.filter((v) => v.id !== variationId))
+    } catch (error) {
+      toast.error('Erro ao remover variação')
     }
   }
 
@@ -229,8 +286,9 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                   step="0.01"
                   value={itemPrice}
                   onChange={(e) => setItemPrice(e.target.value)}
-                  placeholder="Preço (opcional)"
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  placeholder={variations.length > 0 ? 'Preço (ignorado — usa variações)' : 'Preço (opcional)'}
+                  disabled={variations.length > 0}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:bg-gray-100"
                 />
                 <input
                   type="number"
@@ -239,10 +297,24 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                   value={itemStock}
                   onChange={(e) => setItemStock(e.target.value)}
                   placeholder="Estoque (ilimitado)"
-                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  disabled={variations.length > 0}
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:bg-gray-100"
                 />
               </div>
-              <ImageUploadField label="Imagem (opcional)" value={itemImageUrl} onChange={setItemImageUrl} />
+              <input
+                type="number"
+                step="0.01"
+                value={itemPromoPrice}
+                onChange={(e) => setItemPromoPrice(e.target.value)}
+                placeholder="Preço promocional (opcional)"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={itemFeatured} onChange={(e) => setItemFeatured(e.target.checked)} />
+                Item em destaque
+              </label>
+              <ImageUploadField label="Imagem principal (opcional)" value={itemImageUrl} onChange={setItemImageUrl} />
+              <MultiImageUploadField label="Galeria de fotos (opcional)" value={itemGallery} onChange={setItemGallery} />
             </>
           )}
           {supportsCategories && categories.length > 0 && (
@@ -259,6 +331,60 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
               ))}
             </select>
           )}
+
+          {editingId && !isAgenda && (
+            <div className="border-t border-gray-200 pt-2 mt-2">
+              <p className="text-xs font-semibold text-gray-600 mb-1.5">
+                Variações (tamanho, sabor, cor...) — quando existem, o preço/estoque acima é ignorado
+              </p>
+              <div className="space-y-1.5 mb-2">
+                {variations.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between text-xs border border-gray-200 rounded px-2 py-1">
+                    <span>
+                      {v.name} · R$ {v.price.toFixed(2)} {v.stock != null && `· estoque: ${v.stock}`}
+                    </span>
+                    <button type="button" onClick={() => handleRemoveVariation(v.id)} className="text-gray-400 hover:text-red-600">
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <input
+                  type="text"
+                  value={variationName}
+                  onChange={(e) => setVariationName(e.target.value)}
+                  placeholder="Nome"
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={variationPrice}
+                  onChange={(e) => setVariationPrice(e.target.value)}
+                  placeholder="Preço"
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
+                  value={variationStock}
+                  onChange={(e) => setVariationStock(e.target.value)}
+                  placeholder="Estoque"
+                  className="px-2 py-1 text-xs border border-gray-300 rounded"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddVariation}
+                className="mt-1.5 text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200"
+              >
+                + Adicionar variação
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button
               type="submit"
@@ -300,12 +426,16 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                   )}
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-gray-900 truncate">
+                      {item.extra?.featured && <span className="text-amber-500">★ </span>}
                       {item.name}
                       {item.price != null && (
                         <span className="text-gray-500 font-normal"> · R$ {item.price.toFixed(2)}</span>
                       )}
                       {item.stock != null && (
                         <span className="text-gray-500 font-normal"> · estoque: {item.stock}</span>
+                      )}
+                      {item.variations?.length > 0 && (
+                        <span className="text-gray-500 font-normal"> · {item.variations.length} variação(ões)</span>
                       )}
                       {isAgenda && (item.extra?.data || item.extra?.hora) && (
                         <span className="text-gray-500 font-normal">
