@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import AppRuntime from '@/components/AppRuntime'
+import AppRuntime, { type NavigationStyle, type HomeScreenStyle } from '@/components/AppRuntime'
 import PhoneFrame from '@/components/PhoneFrame'
 import PlatformToggle from '@/components/PlatformToggle'
 import type { Module } from '@/types'
@@ -17,6 +17,8 @@ interface AppPreviewProps {
   homeModule: string
   homeImageUrl?: string
   fontFamily?: string
+  navigationStyle?: NavigationStyle
+  homeScreenStyle?: HomeScreenStyle
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void

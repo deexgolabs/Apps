@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { useAuthStore } from '@/store/useAuthStore'
 import ModuleSettingsModal from '@/components/ModuleSettingsModal'
 import AppPreview from '@/components/AppPreview'
+import type { NavigationStyle, HomeScreenStyle } from '@/components/AppRuntime'
 import AddModulePanel from '@/components/AddModulePanel'
 import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
@@ -64,6 +65,8 @@ export default function AppEditorPage({ params }: PageProps) {
   const [homeModule, setHomeModule] = useState('')
   const [homeImageUrl, setHomeImageUrl] = useState('')
   const [fontFamily, setFontFamily] = useState('')
+  const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>('hamburger')
+  const [homeScreenStyle, setHomeScreenStyle] = useState<HomeScreenStyle>('content')
   const [activeModules, setActiveModules] = useState<string[]>([])
   const [configuringModule, setConfiguringModule] = useState<string | null>(null)
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, any>>({})
@@ -98,6 +101,8 @@ export default function AppEditorPage({ params }: PageProps) {
         setHomeModule(appData.config?.home_module || '')
         setHomeImageUrl(appData.config?.home_image_url || '')
         setFontFamily(appData.config?.font_family || '')
+        setNavigationStyle(appData.config?.navigation_style || 'hamburger')
+        setHomeScreenStyle(appData.config?.home_screen_style || 'content')
         setActiveModules(appData.modules || [])
         setModules(modulesRes.data)
       } catch (error) {
@@ -130,6 +135,8 @@ export default function AppEditorPage({ params }: PageProps) {
           home_module: homeModule,
           home_image_url: homeImageUrl,
           font_family: fontFamily,
+          navigation_style: navigationStyle,
+          home_screen_style: homeScreenStyle,
         },
         modules: activeModules,
       })
@@ -323,6 +330,36 @@ export default function AppEditorPage({ params }: PageProps) {
                     ))}
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Estilo de navegação</label>
+                  <select
+                    value={navigationStyle}
+                    onChange={(e) => setNavigationStyle(e.target.value as NavigationStyle)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  >
+                    <option value="hamburger">Menu hambúrguer (☰)</option>
+                    <option value="bottom_tabs">Barra inferior de abas</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Como o cliente vai navegar entre os módulos do app.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tela inicial</label>
+                  <select
+                    value={homeScreenStyle}
+                    onChange={(e) => setHomeScreenStyle(e.target.value as HomeScreenStyle)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  >
+                    <option value="content">Conteúdo do módulo inicial</option>
+                    <option value="icon_grid">Grade de ícones (estilo tela de apps)</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Grade de ícones mostra todos os módulos como atalhos, tipo tela inicial de celular.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -386,6 +423,8 @@ export default function AppEditorPage({ params }: PageProps) {
             homeModule={homeModule}
             homeImageUrl={homeImageUrl}
             fontFamily={fontFamily}
+            navigationStyle={navigationStyle}
+            homeScreenStyle={homeScreenStyle}
             editable
             onModulesChange={setActiveModules}
             onConfigureModule={setConfiguringModule}

@@ -41,8 +41,13 @@ import ItemReviews from '@/components/ItemReviews'
 import { parseFreteRules } from '@/lib/frete'
 import OperatingHoursBadge from '@/components/OperatingHoursBadge'
 import InstallPwaButton from '@/components/InstallPwaButton'
+import IconGridHomeScreen from '@/components/IconGridHomeScreen'
+import BottomTabBar from '@/components/BottomTabBar'
 
 export type RuntimeMode = 'owner' | 'public'
+
+export type NavigationStyle = 'hamburger' | 'bottom_tabs'
+export type HomeScreenStyle = 'content' | 'icon_grid'
 
 interface AppRuntimeProps {
   mode: RuntimeMode
@@ -56,6 +61,8 @@ interface AppRuntimeProps {
   homeModule: string
   homeImageUrl?: string
   fontFamily?: string
+  navigationStyle?: NavigationStyle
+  homeScreenStyle?: HomeScreenStyle
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void
@@ -1264,6 +1271,8 @@ export default function AppRuntime({
   homeModule,
   homeImageUrl,
   fontFamily,
+  navigationStyle = 'hamburger',
+  homeScreenStyle = 'content',
   editable = false,
   onModulesChange,
   onConfigureModule,
@@ -1274,6 +1283,7 @@ export default function AppRuntime({
   const [menuOpen, setMenuOpen] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
   const [selectedModule, setSelectedModule] = useState(homeModule || activeModules[0] || '')
+  const [showIconGridHome, setShowIconGridHome] = useState(homeScreenStyle === 'icon_grid')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1302,8 +1312,24 @@ export default function AppRuntime({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeModules, homeModule])
 
+  useEffect(() => {
+    setShowIconGridHome(homeScreenStyle === 'icon_grid')
+  }, [homeScreenStyle])
+
   const moduleByName = new Map(modules.map((m) => [m.name, m]))
   const isHomeScreen = selectedModule === (homeModule || activeModules[0])
+
+  const goHome = () => {
+    setSelectedModule(homeModule || activeModules[0] || '')
+    setShowIconGridHome(homeScreenStyle === 'icon_grid')
+    setMenuOpen(false)
+  }
+
+  const selectModule = (name: string) => {
+    setSelectedModule(name)
+    setShowIconGridHome(false)
+    setMenuOpen(false)
+  }
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event
@@ -1317,19 +1343,25 @@ export default function AppRuntime({
   const content = (
     <div className="contents" style={{ fontFamily: fontFamily || undefined }}>
       <div className="h-10 flex items-center justify-between px-3" style={{ backgroundColor: primaryColor }}>
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          className="text-white text-lg leading-none"
-          aria-label="Abrir menu"
-        >
-          ☰
-        </button>
-        {logoUrl ? (
-          <img src={logoUrl} alt={appName} className="h-6 object-contain" />
+        {navigationStyle === 'bottom_tabs' ? (
+          <span className="w-4" />
         ) : (
-          <span className="text-white text-sm font-semibold truncate">{appName}</span>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="text-white text-lg leading-none"
+            aria-label="Abrir menu"
+          >
+            ☰
+          </button>
         )}
+        <button type="button" onClick={goHome} className="flex items-center justify-center min-w-0">
+          {logoUrl ? (
+            <img src={logoUrl} alt={appName} className="h-6 object-contain" />
+          ) : (
+            <span className="text-white text-sm font-semibold truncate">{appName}</span>
+          )}
+        </button>
         {mode === 'public' ? <InstallPwaButton /> : <span className="w-4" />}
       </div>
 
@@ -1337,7 +1369,10 @@ export default function AppRuntime({
         <img src={homeImageUrl} alt="" className="w-full h-32 object-cover shrink-0" />
       )}
 
-      <div className="min-h-[320px] p-4" style={{ borderTop: `2px solid ${secondaryColor}` }}>
+      <div
+        className={`min-h-[320px] p-4 ${navigationStyle === 'bottom_tabs' ? 'pb-20' : ''}`}
+        style={{ borderTop: `2px solid ${secondaryColor}` }}
+      >
         {loading ? (
           <div className="space-y-3">
             <Skeleton className="h-4 w-3/4" />
@@ -1346,6 +1381,14 @@ export default function AppRuntime({
           </div>
         ) : activeModules.length === 0 ? (
           <p className="text-sm text-gray-400 italic text-center mt-8">Nenhum módulo ativo ainda</p>
+        ) : showIconGridHome ? (
+          <IconGridHomeScreen
+            modules={modules}
+            activeModules={activeModules}
+            configs={configs}
+            primaryColor={primaryColor}
+            onSelect={selectModule}
+          />
         ) : (
           <div key={selectedModule} className="module-fade-in">
             {selectedModule in LIST_MODULES ? (
@@ -1409,11 +1452,8 @@ export default function AppRuntime({
                         label={configs[name]?.display_name || module?.description || name}
                         config={configs[name]}
                         primaryColor={primaryColor}
-                        selected={selectedModule === name}
-                        onSelect={() => {
-                          setSelectedModule(name)
-                          setMenuOpen(false)
-                        }}
+                        selected={!showIconGridHome && selectedModule === name}
+                        onSelect={() => selectModule(name)}
                         onConfigure={() => onConfigureModule?.(name)}
                         onRemove={() => {
                           const label = configs[name]?.display_name || module?.description || name
@@ -1429,15 +1469,12 @@ export default function AppRuntime({
             ) : (
               activeModules.map((name) => {
                 const module = moduleByName.get(name)
-                const selected = selectedModule === name
+                const selected = !showIconGridHome && selectedModule === name
                 return (
                   <button
                     key={name}
                     type="button"
-                    onClick={() => {
-                      setSelectedModule(name)
-                      setMenuOpen(false)
-                    }}
+                    onClick={() => selectModule(name)}
                     className="w-full flex items-center gap-2 text-left px-4 py-3 text-sm border-b border-gray-100 hover:bg-gray-50"
                     style={{
                       backgroundColor: selected ? `${primaryColor}1A` : undefined,
@@ -1455,9 +1492,24 @@ export default function AppRuntime({
         </div>
       )}
 
+      {navigationStyle === 'bottom_tabs' && activeModules.length > 0 && (
+        <BottomTabBar
+          modules={modules}
+          activeModules={activeModules}
+          configs={configs}
+          selected={showIconGridHome ? '' : selectedModule}
+          primaryColor={primaryColor}
+          onSelect={selectModule}
+        />
+      )}
+
       {mode === 'public' && (
         <>
-          <CartButton onClick={() => setCartOpen(true)} color={primaryColor} />
+          <CartButton
+            onClick={() => setCartOpen(true)}
+            color={primaryColor}
+            raised={navigationStyle === 'bottom_tabs'}
+          />
           <CartDrawer
             appId={appId}
             open={cartOpen}
