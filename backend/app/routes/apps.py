@@ -9,6 +9,7 @@ from app.schemas import AppCreate, AppResponse, AppUpdate
 from app.dependencies import get_current_user
 from app.constants import APP_TEMPLATES
 from app.plan_limits import get_plan_limits
+from app.utils import delete_app_cascade
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 
@@ -201,7 +202,7 @@ async def delete_app(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Deleta app"""
+    """Deleta app e todos os dados filhos (categorias, itens, pedidos, usuários finais etc)."""
     app = db.query(App).filter(
         App.id == app_id,
         App.user_id == current_user.id
@@ -213,6 +214,6 @@ async def delete_app(
             detail="App not found"
         )
 
-    db.delete(app)
+    delete_app_cascade(db, app_id)
     db.commit()
     return None

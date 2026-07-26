@@ -8,18 +8,10 @@ from app.dependencies import get_current_admin_user
 from app.models import (
     AdminAuditLog,
     App,
-    AppConfig,
-    AppUser,
-    FormSubmission,
-    ModuleCategory,
-    ModuleItem,
-    Order,
-    OrderItem,
     PlanConfig,
-    PushSendLog,
-    PushSubscription,
     User,
 )
+from app.utils import delete_app_cascade
 from app.schemas import (
     AdminAppDetailResponse,
     AdminAppResponse,
@@ -207,24 +199,13 @@ async def delete_app(
     admin: User = Depends(get_current_admin_user),
 ):
     """Exclui um app definitivamente, limpando as tabelas filhas antes (mesma
-    ordem usada manualmente pra limpar dados de teste durante o desenvolvimento)."""
+    função usada pelo dono em routes/apps.py)."""
     app = db.query(App).filter(App.id == app_id).first()
     if not app:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
 
     app_name = app.name
-    order_ids = [row.id for row in db.query(Order.id).filter(Order.app_id == app_id).all()]
-    if order_ids:
-        db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(synchronize_session=False)
-    db.query(Order).filter(Order.app_id == app_id).delete(synchronize_session=False)
-    db.query(FormSubmission).filter(FormSubmission.app_id == app_id).delete(synchronize_session=False)
-    db.query(PushSendLog).filter(PushSendLog.app_id == app_id).delete(synchronize_session=False)
-    db.query(PushSubscription).filter(PushSubscription.app_id == app_id).delete(synchronize_session=False)
-    db.query(ModuleItem).filter(ModuleItem.app_id == app_id).delete(synchronize_session=False)
-    db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).delete(synchronize_session=False)
-    db.query(AppUser).filter(AppUser.app_id == app_id).delete(synchronize_session=False)
-    db.query(AppConfig).filter(AppConfig.app_id == app_id).delete(synchronize_session=False)
-    db.delete(app)
+    delete_app_cascade(db, app_id)
     db.commit()
 
     _log_audit(db, admin, "delete_app", f"app:{app_id}:{app_name}")

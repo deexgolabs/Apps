@@ -1,6 +1,7 @@
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
+from sqlalchemy.orm import Session
 from typing import Optional
 from app.config import settings
 
@@ -132,3 +133,44 @@ def is_within_operating_hours(horario_text: str, now: datetime) -> bool:
             return True
 
     return False
+
+
+def delete_app_cascade(db: Session, app_id: int) -> None:
+    """Apaga um app e todas as tabelas filhas na ordem certa de FK — usado tanto
+    pelo dono (routes/apps.py) quanto pelo admin (routes/admin.py), já que as
+    tabelas não têm ON DELETE CASCADE no banco. Não dá commit, quem chama decide
+    quando commitar (ou pode fazer mais coisa antes, como log de auditoria)."""
+    from app.models import (
+        App,
+        AppConfig,
+        AppUser,
+        Coupon,
+        FormSubmission,
+        ItemReview,
+        ItemVariation,
+        ModuleCategory,
+        ModuleItem,
+        Order,
+        OrderItem,
+        PushSendLog,
+        PushSubscription,
+    )
+
+    item_ids = [row.id for row in db.query(ModuleItem.id).filter(ModuleItem.app_id == app_id).all()]
+    order_ids = [row.id for row in db.query(Order.id).filter(Order.app_id == app_id).all()]
+
+    if order_ids:
+        db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(synchronize_session=False)
+    if item_ids:
+        db.query(ItemReview).filter(ItemReview.item_id.in_(item_ids)).delete(synchronize_session=False)
+        db.query(ItemVariation).filter(ItemVariation.item_id.in_(item_ids)).delete(synchronize_session=False)
+    db.query(Order).filter(Order.app_id == app_id).delete(synchronize_session=False)
+    db.query(FormSubmission).filter(FormSubmission.app_id == app_id).delete(synchronize_session=False)
+    db.query(PushSendLog).filter(PushSendLog.app_id == app_id).delete(synchronize_session=False)
+    db.query(PushSubscription).filter(PushSubscription.app_id == app_id).delete(synchronize_session=False)
+    db.query(Coupon).filter(Coupon.app_id == app_id).delete(synchronize_session=False)
+    db.query(ModuleItem).filter(ModuleItem.app_id == app_id).delete(synchronize_session=False)
+    db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).delete(synchronize_session=False)
+    db.query(AppUser).filter(AppUser.app_id == app_id).delete(synchronize_session=False)
+    db.query(AppConfig).filter(AppConfig.app_id == app_id).delete(synchronize_session=False)
+    db.query(App).filter(App.id == app_id).delete(synchronize_session=False)
