@@ -152,6 +152,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         ModuleItem,
         Order,
         OrderItem,
+        OrderStatusEvent,
         PushSendLog,
         PushSubscription,
     )
@@ -160,6 +161,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
     order_ids = [row.id for row in db.query(Order.id).filter(Order.app_id == app_id).all()]
 
     if order_ids:
+        db.query(OrderStatusEvent).filter(OrderStatusEvent.order_id.in_(order_ids)).delete(synchronize_session=False)
         db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(synchronize_session=False)
     if item_ids:
         db.query(ItemReview).filter(ItemReview.item_id.in_(item_ids)).delete(synchronize_session=False)

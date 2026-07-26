@@ -86,6 +86,12 @@ export interface OrderItem {
   subtotal: number
 }
 
+export interface OrderStatusEvent {
+  id: number
+  status: string
+  created_at: string
+}
+
 export interface Order {
   id: number
   app_id: number
@@ -104,4 +110,5 @@ export interface Order {
   created_at: string
   updated_at: string
   items: OrderItem[]
+  status_events: OrderStatusEvent[]
 }

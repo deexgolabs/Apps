@@ -9,7 +9,7 @@ from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.email_utils import send_email
-from app.models import App, AppConfig, AppUser, ItemVariation, Module, ModuleItem, Order, OrderItem, User
+from app.models import App, AppConfig, AppUser, ItemVariation, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
 from app.public_utils import get_published_app
 from app.routes.coupons import validate_coupon
 from app.routes.push import send_push_to_end_user
@@ -35,6 +35,27 @@ def _notify_owner_new_order(app: App, order: Order, db: Session) -> None:
         )
     except Exception:
         logger.exception("Falha ao enviar e-mail de novo pedido para %s", owner.email)
+
+
+def _record_status_event(order: Order, db: Session) -> None:
+    """Registra o status atual do pedido na linha do tempo. Chamado na criação
+    (status inicial) e em toda mudança de status feita pelo dono ou pelo
+    cliente (cancelamento)."""
+    db.add(OrderStatusEvent(order_id=order.id, status=order.status))
+
+
+def _notify_owner_order_cancelled(app: App, order: Order, db: Session) -> None:
+    owner = db.query(User).filter(User.id == app.user_id).first()
+    if not owner:
+        return
+    try:
+        send_email(
+            to=owner.email,
+            subject=f"Pedido cancelado pelo cliente em {app.name}",
+            html_body=f"<p>O cliente cancelou o pedido #{order.id} ({order.module_name}) antes do preparo.</p>",
+        )
+    except Exception:
+        logger.exception("Falha ao enviar e-mail de cancelamento para %s", owner.email)
 
 
 def _get_module_settings(app_id: int, module_name: str, db: Session) -> dict:
@@ -70,6 +91,8 @@ async def create_order(
         payment_reference=order_data.payment_reference,
     )
     db.add(order)
+    db.flush()
+    _record_status_event(order, db)
     db.commit()
     db.refresh(order)
 
@@ -198,6 +221,7 @@ async def create_cart_checkout(
     )
     db.add(order)
     db.flush()
+    _record_status_event(order, db)
 
     for order_item in order_items:
         order_item.order_id = order.id
@@ -276,7 +300,9 @@ async def update_order(
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
-    order.status = order_update.status
+    if order_update.status != order.status:
+        order.status = order_update.status
+        _record_status_event(order, db)
     db.commit()
     db.refresh(order)
 
@@ -297,3 +323,41 @@ async def list_my_orders(
         .order_by(Order.created_at.desc())
         .all()
     )
+
+
+CANCELABLE_STATUSES = {"pending", "confirmed"}
+
+
+@router.put("/my-orders/{order_id}/cancel", response_model=OrderResponse)
+async def cancel_my_order(
+    app_id: int,
+    order_id: int,
+    db: Session = Depends(get_db),
+    end_user: AppUser = Depends(get_current_end_user),
+):
+    """Cliente final cancela o próprio pedido, só permitido enquanto ainda não
+    entrou em preparo (pending/confirmed) — depois disso já pode ter custo
+    real pro lojista, então cancelamento passa a ser só pelo dono."""
+    order = (
+        db.query(Order)
+        .filter(Order.id == order_id, Order.app_id == app_id, Order.end_user_id == end_user.id)
+        .first()
+    )
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    if order.status not in CANCELABLE_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esse pedido já está em preparo e não pode mais ser cancelado pelo cliente",
+        )
+
+    app = db.query(App).filter(App.id == app_id).first()
+
+    order.status = "cancelled"
+    _record_status_event(order, db)
+    db.commit()
+    db.refresh(order)
+
+    _notify_owner_order_cancelled(app, order, db)
+    return order

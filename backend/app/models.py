@@ -145,6 +145,18 @@ class Order(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
     items = relationship("OrderItem", order_by="OrderItem.id", cascade="all, delete-orphan")
+    status_events = relationship("OrderStatusEvent", order_by="OrderStatusEvent.created_at", cascade="all, delete-orphan")
+
+
+class OrderStatusEvent(Base):
+    """Linha do tempo do pedido — uma linha por mudança de status, pra o
+    cliente acompanhar (ex: pending -> confirmed -> preparing -> completed)."""
+    __tablename__ = "order_status_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id"), nullable=False)
+    status = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
 class OrderItem(Base):

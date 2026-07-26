@@ -321,6 +321,15 @@ class OrderItemResponse(BaseModel):
         from_attributes = True
 
 
+class OrderStatusEventResponse(BaseModel):
+    id: int
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class OrderResponse(BaseModel):
     id: int
     app_id: int
@@ -339,6 +348,7 @@ class OrderResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: List[OrderItemResponse] = []
+    status_events: List[OrderStatusEventResponse] = []
 
     class Config:
         from_attributes = True

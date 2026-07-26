@@ -232,3 +232,94 @@ def test_cart_checkout_rejects_empty_cart(client, register_user):
         json={"items": [], "customer": {}},
     )
     assert response.status_code == 400
+
+
+def _end_user_headers(client, app_id, email="cliente_cancel@example.com"):
+    register_end_user = client.post(
+        f"/api/apps/{app_id}/end-users/register",
+        json={"email": email, "password": "senha12345", "full_name": "Cliente"},
+    )
+    assert register_end_user.status_code == 201
+    return {"Authorization": f"Bearer {register_end_user.json()['access_token']}"}
+
+
+def test_order_has_status_event_timeline(client, register_user, db_session):
+    """Todo pedido novo já nasce com um evento na linha do tempo (status
+    inicial), e ganha um evento a mais a cada mudança feita pelo dono."""
+    app_id, owner_headers = _published_app(client, register_user, "ordertimeline@example.com")
+    end_user_headers = _end_user_headers(client, app_id, "timeline@example.com")
+
+    created = client.post(
+        f"/api/apps/{app_id}/modules/formulario_delivery/orders",
+        json={"data": {"nome": "Cliente"}},
+        headers=end_user_headers,
+    )
+    assert created.status_code == 201
+    assert len(created.json()["status_events"]) == 1
+    assert created.json()["status_events"][0]["status"] == "pending"
+    order_id = created.json()["id"]
+
+    updated = client.put(
+        f"/api/apps/{app_id}/orders/{order_id}",
+        json={"status": "confirmed"},
+        headers=owner_headers,
+    )
+    assert updated.status_code == 200
+    events = updated.json()["status_events"]
+    assert [e["status"] for e in events] == ["pending", "confirmed"]
+
+    # reenviar o mesmo status não deve duplicar evento
+    same_status = client.put(
+        f"/api/apps/{app_id}/orders/{order_id}",
+        json={"status": "confirmed"},
+        headers=owner_headers,
+    )
+    assert len(same_status.json()["status_events"]) == 2
+
+
+def test_customer_can_cancel_pending_order_but_not_after_preparing(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "ordercancel@example.com")
+    end_user_headers = _end_user_headers(client, app_id, "cancel@example.com")
+
+    order = client.post(
+        f"/api/apps/{app_id}/modules/formulario_delivery/orders",
+        json={"data": {"nome": "Cliente"}},
+        headers=end_user_headers,
+    )
+    order_id = order.json()["id"]
+
+    cancelled = client.put(f"/api/apps/{app_id}/my-orders/{order_id}/cancel", headers=end_user_headers)
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert [e["status"] for e in cancelled.json()["status_events"]] == ["pending", "cancelled"]
+
+    other_order = client.post(
+        f"/api/apps/{app_id}/modules/formulario_delivery/orders",
+        json={"data": {"nome": "Cliente"}},
+        headers=end_user_headers,
+    )
+    other_order_id = other_order.json()["id"]
+    client.put(
+        f"/api/apps/{app_id}/orders/{other_order_id}",
+        json={"status": "preparing"},
+        headers=owner_headers,
+    )
+
+    too_late = client.put(f"/api/apps/{app_id}/my-orders/{other_order_id}/cancel", headers=end_user_headers)
+    assert too_late.status_code == 400
+
+
+def test_customer_cannot_cancel_another_customers_order(client, register_user):
+    app_id, _ = _published_app(client, register_user, "ordercancelother@example.com")
+    owner_of_order_headers = _end_user_headers(client, app_id, "dono_pedido@example.com")
+    other_customer_headers = _end_user_headers(client, app_id, "outro_cliente@example.com")
+
+    order = client.post(
+        f"/api/apps/{app_id}/modules/formulario_delivery/orders",
+        json={"data": {"nome": "Cliente"}},
+        headers=owner_of_order_headers,
+    )
+    order_id = order.json()["id"]
+
+    forbidden = client.put(f"/api/apps/{app_id}/my-orders/{order_id}/cancel", headers=other_customer_headers)
+    assert forbidden.status_code == 404

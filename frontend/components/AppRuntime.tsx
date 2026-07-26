@@ -32,6 +32,7 @@ import {
 import ModuleIcon from '@/components/ModuleIcon'
 import type { Module, ModuleCategory, ModuleItem, Order } from '@/types'
 import toast from 'react-hot-toast'
+import { showApiError } from '@/lib/apiError'
 import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
 import { CartProvider, useOptionalCart } from '@/context/CartContext'
 import CartButton from '@/components/CartButton'
@@ -777,9 +778,13 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelado',
 }
 
+const CANCELABLE_ORDER_STATUSES = new Set(['pending', 'confirmed'])
+
 function MyOrders({ appId, token }: { appId: string; token: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [cancellingId, setCancellingId] = useState<number | null>(null)
   const cart = useOptionalCart()
 
   useEffect(() => {
@@ -801,6 +806,24 @@ function MyOrders({ appId, token }: { appId: string; token: string }) {
     toast.success('Itens do pedido adicionados ao carrinho!')
   }
 
+  const handleCancel = async (order: Order) => {
+    if (!window.confirm('Cancelar este pedido?')) return
+    setCancellingId(order.id)
+    try {
+      const response = await publicApi.put(
+        `/api/apps/${appId}/my-orders/${order.id}/cancel`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      setOrders((prev) => prev.map((o) => (o.id === order.id ? response.data : o)))
+      toast.success('Pedido cancelado')
+    } catch (error) {
+      showApiError(error, 'Não foi possível cancelar o pedido')
+    } finally {
+      setCancellingId(null)
+    }
+  }
+
   if (loading) return <p className="text-xs text-gray-400">Carregando pedidos...</p>
 
   if (orders.length === 0) return null
@@ -808,25 +831,86 @@ function MyOrders({ appId, token }: { appId: string; token: string }) {
   return (
     <div className="text-left space-y-2 pt-2 border-t border-gray-200">
       <p className="text-sm font-medium text-gray-700">Meus pedidos</p>
-      {orders.map((order) => (
-        <div key={order.id} className="border border-gray-200 rounded-lg p-2 text-xs space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">
-              {order.module_name} — {new Date(order.created_at).toLocaleDateString('pt-BR')}
-            </span>
-            <span className="font-medium text-gray-900">{ORDER_STATUS_LABELS[order.status] || order.status}</span>
-          </div>
-          {cart && order.items.length > 0 && (
+      {orders.map((order) => {
+        const expanded = expandedId === order.id
+        return (
+          <div key={order.id} className="border border-gray-200 rounded-lg p-2 text-xs space-y-1.5">
             <button
               type="button"
-              onClick={() => handleReorder(order)}
-              className="text-indigo-600 hover:text-indigo-700 font-medium"
+              onClick={() => setExpandedId(expanded ? null : order.id)}
+              className="w-full flex items-center justify-between text-left"
             >
-              ↻ Pedir novamente
+              <span className="text-gray-600">
+                {order.module_name} — {new Date(order.created_at).toLocaleDateString('pt-BR')}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-gray-900">{ORDER_STATUS_LABELS[order.status] || order.status}</span>
+                <span className="text-gray-400">{expanded ? '▲' : '▼'}</span>
+              </span>
             </button>
-          )}
-        </div>
-      ))}
+
+            {expanded && (
+              <div className="space-y-2 pt-1.5 border-t border-gray-100">
+                {order.status_events.length > 0 && (
+                  <div className="space-y-0.5">
+                    {order.status_events.map((event) => (
+                      <p key={event.id} className="text-gray-500">
+                        <span className="font-medium text-gray-700">{ORDER_STATUS_LABELS[event.status] || event.status}</span>
+                        {' — '}
+                        {new Date(event.created_at).toLocaleString('pt-BR')}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {order.items.length > 0 && (
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {order.items.map((oi) => (
+                        <tr key={oi.id} className="border-b border-gray-100 last:border-0">
+                          <td className="py-1 text-gray-700">
+                            {oi.quantity}x {oi.name}
+                          </td>
+                          <td className="py-1 text-right text-gray-700 font-medium">R$ {oi.subtotal.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                {order.amount != null && (
+                  <p className="text-gray-700 font-medium">Total: R$ {order.amount.toFixed(2)}</p>
+                )}
+                {Object.entries(order.data).map(([key, value]) => (
+                  <p key={key} className="text-gray-600">
+                    <span className="font-medium">{key}:</span> {String(value)}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              {cart && order.items.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => handleReorder(order)}
+                  className="text-indigo-600 hover:text-indigo-700 font-medium"
+                >
+                  ↻ Pedir novamente
+                </button>
+              )}
+              {CANCELABLE_ORDER_STATUSES.has(order.status) && (
+                <button
+                  type="button"
+                  onClick={() => handleCancel(order)}
+                  disabled={cancellingId === order.id}
+                  className="text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
+                >
+                  {cancellingId === order.id ? 'Cancelando...' : '✕ Cancelar pedido'}
+                </button>
+              )}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
