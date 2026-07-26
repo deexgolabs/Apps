@@ -254,6 +254,8 @@ class EndUserResponse(BaseModel):
     app_id: int
     email: EmailStr
     full_name: str
+    phone: Optional[str] = None
+    address: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -264,6 +266,14 @@ class EndUserToken(BaseModel):
     access_token: str
     token_type: str
     user: EndUserResponse
+
+
+class EndUserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
 
 
 # ===== FORM SUBMISSION SCHEMAS =====

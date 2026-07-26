@@ -7,7 +7,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import App, AppUser, User
 from app.rate_limit import limiter
-from app.schemas import EndUserCreate, EndUserLogin, EndUserResponse, EndUserToken
+from app.schemas import EndUserCreate, EndUserLogin, EndUserProfileUpdate, EndUserResponse, EndUserToken
 from app.utils import hash_password, verify_password, create_access_token
 from app.dependencies import get_current_user, get_current_end_user
 
@@ -126,6 +126,34 @@ async def facebook_login_url(app_id: int, db: Session = Depends(get_db)):
 async def get_current_end_user_info(end_user: AppUser = Depends(get_current_end_user)):
     """Devolve os dados do usuário final autenticado (usado pra restaurar a sessão
     após o redirect do login via Facebook, que só traz o token na URL)."""
+    return end_user
+
+
+@router.put("/me", response_model=EndUserResponse)
+async def update_current_end_user_profile(
+    app_id: int,
+    payload: EndUserProfileUpdate,
+    db: Session = Depends(get_db),
+    end_user: AppUser = Depends(get_current_end_user),
+):
+    """Atualiza nome/telefone/endereço do próprio usuário final, e opcionalmente
+    a senha (exige a senha atual). Usado pra pré-preencher o checkout depois."""
+    if payload.full_name is not None:
+        end_user.full_name = payload.full_name
+    if payload.phone is not None:
+        end_user.phone = payload.phone
+    if payload.address is not None:
+        end_user.address = payload.address
+
+    if payload.new_password:
+        if not end_user.password_hash or not payload.current_password or not verify_password(
+            payload.current_password, end_user.password_hash
+        ):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Senha atual incorreta")
+        end_user.password_hash = hash_password(payload.new_password)
+
+    db.commit()
+    db.refresh(end_user)
     return end_user
 
 

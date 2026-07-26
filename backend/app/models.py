@@ -82,6 +82,8 @@ class AppUser(Base):
     password_hash = Column(String, nullable=True)  # nulo pra contas via login social
     auth_provider = Column(String, default="local")  # local | facebook
     facebook_id = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    address = Column(String, nullable=True)  # endereço padrão, pra pré-preencher o checkout
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { publicApi } from '@/lib/api'
 import { PAGAMENTO_ENTREGA_CUSTOMER_FIELDS } from '@/lib/moduleFields'
-import { endUserAuthHeader } from '@/lib/endUserAuth'
+import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
 import { useCart } from '@/context/CartContext'
 import { showApiError } from '@/lib/apiError'
 import { computeFrete } from '@/lib/frete'
@@ -20,7 +20,23 @@ export default function CheckoutForm({
   allowPickup?: boolean
 }) {
   const cart = useCart()
-  const [values, setValues] = useState<Record<string, string>>({})
+  const [values, setValues] = useState<Record<string, string>>(() => {
+    // Pré-preenche com os dados salvos no perfil do cliente (se ele estiver
+    // logado via login_cadastro) — economiza redigitar nome/telefone/endereço
+    // a cada pedido novo.
+    try {
+      const saved = localStorage.getItem(endUserSessionKey(appId))
+      if (!saved) return {}
+      const { user } = JSON.parse(saved)
+      const prefilled: Record<string, string> = {}
+      if (user?.full_name) prefilled.nome = user.full_name
+      if (user?.phone) prefilled.telefone = user.phone
+      if (user?.address) prefilled.endereco = user.address
+      return prefilled
+    } catch {
+      return {}
+    }
+  })
   const [cep, setCep] = useState('')
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery')
   const [couponInput, setCouponInput] = useState('')

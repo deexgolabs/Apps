@@ -831,14 +831,28 @@ function MyOrders({ appId, token }: { appId: string; token: string }) {
   )
 }
 
+interface LoggedInEndUser {
+  full_name: string
+  email?: string
+  phone?: string | null
+  address?: string | null
+}
+
 function EndUserAuthWidget({ appId }: { appId: string }) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [loggedInUser, setLoggedInUser] = useState<{ full_name: string } | null>(null)
+  const [loggedInUser, setLoggedInUser] = useState<LoggedInEndUser | null>(null)
   const [endUserToken, setEndUserToken] = useState<string | null>(null)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [profileFullName, setProfileFullName] = useState('')
+  const [profilePhone, setProfilePhone] = useState('')
+  const [profileAddress, setProfileAddress] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [savingProfile, setSavingProfile] = useState(false)
 
   // Restaura a sessão salva no localStorage, e trata o redirect de volta do
   // login via Facebook (?fb_token=... na URL) buscando os dados do usuário.
@@ -909,24 +923,120 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
     }
   }
 
+  const handleSaveProfile = async () => {
+    if (!endUserToken) return
+    if (newPassword && !currentPassword) {
+      toast.error('Informe a senha atual pra trocar de senha')
+      return
+    }
+    setSavingProfile(true)
+    try {
+      const response = await publicApi.put(
+        `/api/apps/${appId}/end-users/me`,
+        {
+          full_name: profileFullName,
+          phone: profilePhone,
+          address: profileAddress,
+          ...(newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
+        },
+        { headers: { Authorization: `Bearer ${endUserToken}` } }
+      )
+      setLoggedInUser(response.data)
+      localStorage.setItem(endUserSessionKey(appId), JSON.stringify({ token: endUserToken, user: response.data }))
+      setEditingProfile(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      toast.success('Perfil atualizado!')
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Erro ao atualizar perfil')
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
   if (loggedInUser) {
     return (
       <div className="text-center space-y-3 mt-8">
         <p className="text-sm text-gray-700">Olá, <span className="font-semibold">{loggedInUser.full_name}</span>!</p>
-        <button
-          type="button"
-          onClick={() => {
-            localStorage.removeItem(endUserSessionKey(appId))
-            setLoggedInUser(null)
-            setEndUserToken(null)
-            setEmail('')
-            setPassword('')
-            setFullName('')
-          }}
-          className="text-xs text-indigo-600 hover:text-indigo-700"
-        >
-          Sair
-        </button>
+        <div className="flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setProfileFullName(loggedInUser.full_name || '')
+              setProfilePhone(loggedInUser.phone || '')
+              setProfileAddress(loggedInUser.address || '')
+              setEditingProfile((v) => !v)
+            }}
+            className="text-xs text-indigo-600 hover:text-indigo-700"
+          >
+            {editingProfile ? 'Cancelar' : 'Editar perfil'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem(endUserSessionKey(appId))
+              setLoggedInUser(null)
+              setEndUserToken(null)
+              setEmail('')
+              setPassword('')
+              setFullName('')
+              setEditingProfile(false)
+            }}
+            className="text-xs text-gray-400 hover:text-gray-600"
+          >
+            Sair
+          </button>
+        </div>
+
+        {editingProfile && (
+          <div className="text-left space-y-2 border border-gray-200 rounded-lg p-3">
+            <input
+              type="text"
+              value={profileFullName}
+              onChange={(e) => setProfileFullName(e.target.value)}
+              placeholder="Nome"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+            <input
+              type="text"
+              value={profilePhone}
+              onChange={(e) => setProfilePhone(e.target.value)}
+              placeholder="Telefone"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+            <textarea
+              value={profileAddress}
+              onChange={(e) => setProfileAddress(e.target.value)}
+              placeholder="Endereço padrão (usado pra pré-preencher pedidos)"
+              rows={2}
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+            <p className="text-[11px] text-gray-400 pt-1">Trocar senha (opcional)</p>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Senha atual"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Nova senha"
+              className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+            />
+            <button
+              type="button"
+              onClick={handleSaveProfile}
+              disabled={savingProfile}
+              className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              {savingProfile ? 'Salvando...' : 'Salvar perfil'}
+            </button>
+          </div>
+        )}
+
         {endUserToken && <MyOrders appId={appId} token={endUserToken} />}
       </div>
     )
