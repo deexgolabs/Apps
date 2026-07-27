@@ -23,12 +23,13 @@ Plataforma de criação de aplicativos sem código (estilo [Web Robot Apps](http
 - **Duplicar app** e checklist de progresso (logo/ícone, módulo configurado, publicado) na aba Geral do editor.
 - **Preview Android/iOS** alternável, fonte customizável por app, e ícones vetoriais ([lucide-react](https://lucide.dev)) por módulo (com opção de emoji ou imagem de fundo customizados).
 - **Pedidos**: formulário de delivery, cotação e pagamento na entrega geram um `Order` de verdade (com status `pending`/`confirmed`/`preparing`/`completed`/`cancelled`), reunidos numa aba "Pedidos" no editor com controle de status; se o cliente final estiver logado (`login_cadastro`), o pedido some pra conta dele em "Meus pedidos".
-- **Verificação real de pagamento**: checkout via Mercado Pago/PayPal/PagSeguro cria um `Order` vinculado à cobrança na gateway (via `external_reference`/id do pedido na gateway) e não finge sucesso — o cliente confirma depois de pagar, e o backend consulta a gateway de verdade antes de marcar como `confirmed`.
+- **Verificação real de pagamento**: checkout via Mercado Pago/PayPal/PagSeguro cria um `Order` vinculado à cobrança na gateway (via `external_reference`/id do pedido na gateway) e não finge sucesso — o cliente pode confirmar manualmente depois de pagar, e há webhooks (`/api/apps/{app_id}/webhooks/{gateway}`) que confirmam automaticamente assim que a gateway notifica (Mercado Pago e PagSeguro recebem `notification_url` dinâmica por pedido; PayPal exige configurar a URL uma vez no painel de developer). O webhook nunca confia no corpo da notificação — sempre reconsulta a gateway com as credenciais configuradas antes de marcar como `confirmed`.
 - **Notificações**: aba dedicada no editor (quando o módulo está ativo) com envio + histórico dos títulos/mensagens já enviados.
 - **Formulário de contato personalizado**: campos aceitam tipo (`Rótulo:numero`, `Rótulo:data`) e obrigatoriedade (`Rótulo*`), com respostas recebidas visíveis no ⚙ do módulo.
 - **Administração**: limites e preço de cada plano (`free`/`pro`/`business`) editáveis pelo painel admin (não são mais fixos em código), detalhe/suspensão/exclusão de apps de qualquer usuário, log de auditoria das ações do admin, e cards de receita mensal estimada (MRR) e apps publicados.
 - Rate limiting (`slowapi`) nas rotas públicas de autenticação; monitoramento de erro (Sentry) preparado e inativo até receber uma DSN.
-- Suíte de testes (`pytest`) cobrindo apps, auth, admin, billing, push, pedidos, pagamentos, público.
+- Suíte de testes (`pytest`) cobrindo apps, auth, admin, billing, push, pedidos, pagamentos, público, webhooks.
+- Suíte de testes de frontend (`vitest` + Testing Library) cobrindo o carrinho (`CartContext`), regras de frete/campos personalizados e componentes de wishlist — `cd frontend && npm test`.
 
 ## Estrutura
 
@@ -139,7 +140,7 @@ O SDK já está integrado (backend: `sentry_sdk.init` em `app/main.py`; frontend
 
 ## Repositório remoto e CI
 
-O projeto já tem um repositório git local (`git log` mostra o histórico), mas sem remoto — sem isso, o workflow em `.github/workflows/tests.yml` (roda o `pytest` a cada push/PR) não executa. Pra ativar:
+O projeto já tem um repositório git local (`git log` mostra o histórico), mas sem remoto — sem isso, o workflow em `.github/workflows/tests.yml` (roda `pytest` e `vitest` a cada push/PR) não executa. Pra ativar:
 
 ```bash
 cd plataforma-apps
