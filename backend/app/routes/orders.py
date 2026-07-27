@@ -10,11 +10,21 @@ from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.email_utils import send_email
 from app.models import App, AppConfig, AppUser, ItemVariation, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
+from app.payment_gateways import (
+    checkout_mercado_pago,
+    checkout_pagseguro,
+    checkout_paypal,
+    verify_mercado_pago,
+    verify_pagseguro,
+    verify_paypal,
+)
 from app.public_utils import get_published_app
 from app.routes.coupons import validate_coupon
 from app.routes.push import send_push_to_end_user
 from app.schemas import CartCheckoutRequest, OrderCreate, OrderResponse, OrderUpdate
 from app.utils import compute_frete, is_within_operating_hours
+
+GATEWAY_MODULES = {"mercado_pago", "paypal", "pagseguro"}
 
 router = APIRouter(prefix="/api/apps/{app_id}", tags=["orders"])
 logger = logging.getLogger("app.orders")
@@ -68,6 +78,42 @@ def _get_module_settings(app_id: int, module_name: str, db: Session) -> dict:
     return row.settings if row and row.settings else {}
 
 
+async def _start_gateway_checkout(gateway: str, settings: dict, valor: float, titulo: str, order_id: int) -> tuple[str | None, str | None]:
+    """Abre uma cobrança na gateway pelo valor real do carrinho — diferente do
+    fluxo de módulo de pagamento avulso (routes/payments.py), que usa um valor
+    fixo configurado nas settings. Devolve (checkout_url, payment_reference)."""
+    if gateway == "mercado_pago":
+        access_token = settings.get("access_token")
+        if not access_token:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Módulo não configurado: falta o access_token do Mercado Pago")
+        result = await checkout_mercado_pago(valor, titulo, access_token, external_reference=str(order_id))
+        return result.get("checkout_url"), str(order_id)
+    if gateway == "paypal":
+        client_id = settings.get("client_id")
+        client_secret = settings.get("client_secret")
+        if not client_id or not client_secret:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Módulo não configurado: falta o client_id/client_secret do PayPal")
+        result = await checkout_paypal(str(valor), titulo, client_id, client_secret)
+        return result.get("checkout_url"), result.get("gateway_order_id")
+    if gateway == "pagseguro":
+        token = settings.get("token")
+        if not token:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Módulo não configurado: falta o token do PagSeguro")
+        result = await checkout_pagseguro(valor, titulo, token)
+        return result.get("checkout_url"), result.get("gateway_order_id")
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gateway de pagamento inválida")
+
+
+async def _verify_gateway_payment(gateway: str, settings: dict, payment_reference: str) -> bool:
+    if gateway == "mercado_pago":
+        return await verify_mercado_pago(payment_reference, settings.get("access_token"))
+    if gateway == "paypal":
+        return await verify_paypal(payment_reference, settings.get("client_id"), settings.get("client_secret"))
+    if gateway == "pagseguro":
+        return await verify_pagseguro(payment_reference, settings.get("token"))
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gateway de pagamento inválida")
+
+
 @router.post("/modules/{module_name}/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(
     app_id: int,
@@ -116,6 +162,9 @@ async def create_cart_checkout(
 
     if not payload.items:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Carrinho vazio")
+
+    if payload.gateway and payload.gateway not in GATEWAY_MODULES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gateway de pagamento inválida")
 
     order_items: List[OrderItem] = []
     subtotal = 0.0
@@ -217,6 +266,7 @@ async def create_cart_checkout(
         discount_amount=discount_amount,
         coupon_code=coupon.code if coupon else None,
         fulfillment_type=payload.fulfillment_type,
+        payment_method=payload.gateway,
         status="pending",
     )
     db.add(order)
@@ -237,6 +287,44 @@ async def create_cart_checkout(
     db.refresh(order)
 
     _notify_owner_new_order(app, order, db)
+
+    checkout_url = None
+    if payload.gateway:
+        gateway_settings = _get_module_settings(app_id, payload.gateway, db)
+        checkout_url, payment_reference = await _start_gateway_checkout(
+            payload.gateway, gateway_settings, total, app.name, order.id
+        )
+        order.payment_reference = payment_reference
+        db.commit()
+        db.refresh(order)
+
+    order.checkout_url = checkout_url
+    return order
+
+
+@router.post("/orders/{order_id}/confirm-payment", response_model=OrderResponse)
+async def confirm_cart_order_payment(app_id: int, order_id: int, db: Session = Depends(get_db)):
+    """Consulta a gateway configurada pro pedido (guardada em payment_method na
+    hora do checkout) e confirma o pagamento, igual ao fluxo de módulo de
+    pagamento avulso — mas aqui pro pedido feito pelo carrinho. Rota pública,
+    chamada pelo cliente final depois de voltar do checkout da gateway."""
+    order = db.query(Order).filter(Order.id == order_id, Order.app_id == app_id).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+
+    if not order.payment_method or order.payment_method not in GATEWAY_MODULES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Este pedido não usa pagamento por gateway")
+
+    if order.status != "confirmed":
+        settings = _get_module_settings(app_id, order.payment_method, db)
+        approved = await _verify_gateway_payment(order.payment_method, settings, order.payment_reference)
+        if approved:
+            app = db.query(App).filter(App.id == app_id).first()
+            order.status = "confirmed"
+            _record_status_event(order, db)
+            db.commit()
+            db.refresh(order)
+            _notify_customer_status_change(app, order, db)
 
     return order
 

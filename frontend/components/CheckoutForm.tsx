@@ -7,17 +7,26 @@ import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
 import { useCart } from '@/context/CartContext'
 import { showApiError } from '@/lib/apiError'
 import { computeFrete } from '@/lib/frete'
+import toast from 'react-hot-toast'
+
+const GATEWAY_LABELS: Record<string, string> = {
+  mercado_pago: 'Mercado Pago',
+  paypal: 'PayPal',
+  pagseguro: 'PagSeguro',
+}
 
 export default function CheckoutForm({
   appId,
   onDone,
   freteRegras,
   allowPickup = true,
+  availableGateways = [],
 }: {
   appId: string
   onDone: () => void
   freteRegras?: string
   allowPickup?: boolean
+  availableGateways?: string[]
 }) {
   const cart = useCart()
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -45,8 +54,15 @@ export default function CheckoutForm({
   const [validatingCoupon, setValidatingCoupon] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<'entrega' | string>('entrega')
+  const [gatewayOrderId, setGatewayOrderId] = useState<number | null>(null)
+  const [gatewayStatus, setGatewayStatus] = useState<string | null>(null)
+  const [confirmingPayment, setConfirmingPayment] = useState(false)
 
-  if (!cart.cartModuleName) return null
+  // cart.clear() zera o cartModuleName (derivado de items[0]) no mesmo
+  // instante em que confirmamos o pedido — sem a exceção abaixo, a tela de
+  // "Pedido confirmado!"/aguardando pagamento nunca chegaria a aparecer.
+  if (!cart.cartModuleName && !sent && !gatewayOrderId) return null
 
   const deliveryFee = fulfillment === 'delivery' ? computeFrete(freteRegras || '', cep) : 0
   const total = cart.subtotal + deliveryFee - (couponDiscount || 0)
@@ -81,7 +97,7 @@ export default function CheckoutForm({
   const handleSubmit = async () => {
     setSending(true)
     try {
-      await publicApi.post(
+      const response = await publicApi.post(
         `/api/apps/${appId}/modules/${cart.cartModuleName}/cart-checkout`,
         {
           items: cart.items.map((i) => ({ item_id: i.item_id, variation_id: i.variation_id, quantity: i.quantity })),
@@ -89,15 +105,47 @@ export default function CheckoutForm({
           coupon_code: couponInput.trim() || undefined,
           fulfillment_type: fulfillment,
           cep: fulfillment === 'delivery' ? cep : undefined,
+          gateway: paymentMethod !== 'entrega' ? paymentMethod : undefined,
         },
         { headers: endUserAuthHeader(appId) }
       )
-      setSent(true)
-      cart.clear()
+
+      if (paymentMethod !== 'entrega') {
+        const url = response.data.checkout_url
+        if (url) {
+          window.open(url, '_blank', 'noopener,noreferrer')
+          setGatewayOrderId(response.data.id)
+          setGatewayStatus('pending')
+          cart.clear()
+        } else {
+          toast.error('A gateway não retornou um link de pagamento')
+        }
+      } else {
+        setSent(true)
+        cart.clear()
+      }
     } catch (error) {
       showApiError(error, 'Erro ao fechar pedido')
     } finally {
       setSending(false)
+    }
+  }
+
+  const handleConfirmGatewayPayment = async () => {
+    if (!gatewayOrderId) return
+    setConfirmingPayment(true)
+    try {
+      const response = await publicApi.post(`/api/apps/${appId}/orders/${gatewayOrderId}/confirm-payment`)
+      setGatewayStatus(response.data.status)
+      if (response.data.status === 'confirmed') {
+        toast.success('Pagamento confirmado!')
+      } else {
+        toast.error('Ainda não identificamos o pagamento. Tente novamente após concluir no checkout.')
+      }
+    } catch (error) {
+      showApiError(error, 'Erro ao confirmar pagamento')
+    } finally {
+      setConfirmingPayment(false)
     }
   }
 
@@ -108,6 +156,35 @@ export default function CheckoutForm({
         <button type="button" onClick={onDone} className="mt-3 text-sm text-indigo-600 underline">
           Voltar
         </button>
+      </div>
+    )
+  }
+
+  if (gatewayOrderId) {
+    return (
+      <div className="text-center py-6 space-y-3">
+        {gatewayStatus === 'confirmed' ? (
+          <p className="text-green-600 font-medium">Pagamento confirmado!</p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-700">
+              Complete o pagamento na aba que abrimos e depois confirme aqui.
+            </p>
+            <button
+              type="button"
+              onClick={handleConfirmGatewayPayment}
+              disabled={confirmingPayment}
+              className="bg-indigo-600 text-white text-sm font-medium rounded py-2 px-4 disabled:opacity-50"
+            >
+              {confirmingPayment ? 'Verificando...' : 'Já paguei'}
+            </button>
+          </>
+        )}
+        <div>
+          <button type="button" onClick={onDone} className="text-sm text-indigo-600 underline">
+            Voltar
+          </button>
+        </div>
       </div>
     )
   }
@@ -196,6 +273,35 @@ export default function CheckoutForm({
         {couponError && <p className="text-[11px] text-red-600 mt-0.5">{couponError}</p>}
       </div>
 
+      {availableGateways.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Forma de pagamento</label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('entrega')}
+              className={`text-xs font-medium py-1.5 px-2 rounded border ${
+                paymentMethod === 'entrega' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-600'
+              }`}
+            >
+              Na entrega
+            </button>
+            {availableGateways.map((gw) => (
+              <button
+                key={gw}
+                type="button"
+                onClick={() => setPaymentMethod(gw)}
+                className={`text-xs font-medium py-1.5 px-2 rounded border ${
+                  paymentMethod === gw ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-600'
+                }`}
+              >
+                {GATEWAY_LABELS[gw] || gw}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="border-t border-gray-200 pt-2 space-y-0.5 text-xs">
         <div className="flex justify-between text-gray-600">
           <span>Subtotal</span>
@@ -225,7 +331,11 @@ export default function CheckoutForm({
         disabled={sending}
         className="w-full bg-indigo-600 text-white text-sm font-medium rounded py-2 disabled:opacity-50"
       >
-        {sending ? 'Enviando...' : `Confirmar pedido — R$ ${total.toFixed(2)}`}
+        {sending
+          ? 'Enviando...'
+          : paymentMethod === 'entrega'
+            ? `Confirmar pedido — R$ ${total.toFixed(2)}`
+            : `Pagar com ${GATEWAY_LABELS[paymentMethod] || paymentMethod} — R$ ${total.toFixed(2)}`}
       </button>
     </div>
   )

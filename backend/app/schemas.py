@@ -349,6 +349,7 @@ class OrderResponse(BaseModel):
     updated_at: datetime
     items: List[OrderItemResponse] = []
     status_events: List[OrderStatusEventResponse] = []
+    checkout_url: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -366,6 +367,7 @@ class CartCheckoutRequest(BaseModel):
     coupon_code: Optional[str] = None
     fulfillment_type: str = "delivery"
     cep: Optional[str] = None
+    gateway: Optional[str] = None
 
 
 class CouponCreate(BaseModel):

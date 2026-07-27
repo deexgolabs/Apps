@@ -1201,6 +1201,12 @@ const GATEWAY_LABELS: Record<string, string> = {
   pagseguro: 'PagSeguro',
 }
 
+const GATEWAY_CREDENTIAL_KEYS: Record<string, string[]> = {
+  mercado_pago: ['access_token'],
+  paypal: ['client_id', 'client_secret'],
+  pagseguro: ['token'],
+}
+
 function PaymentWidget({
   appId,
   moduleName,
@@ -1709,6 +1715,11 @@ export default function AppRuntime({
             open={cartOpen}
             onClose={() => setCartOpen(false)}
             freteRegras={configs['calculo_frete']?.regras}
+            availableGateways={PAYMENT_GATEWAY_MODULES.filter(
+              (gw) =>
+                activeModules.includes(gw) &&
+                GATEWAY_CREDENTIAL_KEYS[gw].every((key) => configs[gw]?.[key])
+            )}
           />
         </>
       )}

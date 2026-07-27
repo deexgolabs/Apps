@@ -9,11 +9,13 @@ export default function CartDrawer({
   open,
   onClose,
   freteRegras,
+  availableGateways,
 }: {
   appId: string
   open: boolean
   onClose: () => void
   freteRegras?: string
+  availableGateways?: string[]
 }) {
   const cart = useCart()
   const [checkingOut, setCheckingOut] = useState(false)
@@ -44,6 +46,7 @@ export default function CartDrawer({
           <CheckoutForm
             appId={appId}
             freteRegras={freteRegras}
+            availableGateways={availableGateways}
             onDone={() => {
               setCheckingOut(false)
               onClose()

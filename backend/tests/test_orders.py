@@ -323,3 +323,76 @@ def test_customer_cannot_cancel_another_customers_order(client, register_user):
 
     forbidden = client.put(f"/api/apps/{app_id}/my-orders/{order_id}/cancel", headers=other_customer_headers)
     assert forbidden.status_code == 404
+
+
+def test_cart_checkout_rejects_invalid_gateway(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "cartgatewayinvalid@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}], "customer": {}, "gateway": "boleto_magico"},
+    )
+    assert response.status_code == 400
+
+
+def test_cart_checkout_with_gateway_fails_when_not_configured(client, register_user, db_session):
+    """Sem access_token configurado no módulo mercado_pago, o checkout via
+    carrinho falha com erro claro — mesma honestidade do fluxo de pagamento
+    avulso em routes/payments.py."""
+    app_id, owner_headers = _published_app(client, register_user, "cartgatewaynoconfig@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}], "customer": {}, "gateway": "mercado_pago"},
+    )
+    assert response.status_code == 400
+
+
+def test_cart_checkout_with_fake_gateway_credentials_returns_gateway_error(client, register_user, db_session):
+    """Com access_token configurado mas inválido, a chamada real pra API do
+    Mercado Pago retorna erro (502) — o Order do carrinho já foi criado com
+    o valor real (não o 'valor' fixo do módulo) antes da tentativa."""
+    app_id, owner_headers = _published_app(client, register_user, "cartgatewayfake@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    config = client.put(
+        f"/api/apps/{app_id}/module-config/mercado_pago",
+        json={"settings": {"access_token": "FAKE-TOKEN-INVALIDO"}},
+        headers=owner_headers,
+    )
+    assert config.status_code == 200
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 2}], "customer": {"nome": "Cliente"}, "gateway": "mercado_pago"},
+    )
+    assert response.status_code == 502
+
+    order = db_session.query(Order).filter(Order.app_id == app_id, Order.module_name == "cardapio").first()
+    assert order is not None
+    assert order.amount == 60.0
+    assert order.payment_method == "mercado_pago"
+    assert order.status == "pending"
+
+
+def test_confirm_cart_order_payment_rejects_non_gateway_order(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "cartconfirmnongateway@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    order = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}], "customer": {}},
+    )
+    order_id = order.json()["id"]
+
+    response = client.post(f"/api/apps/{app_id}/orders/{order_id}/confirm-payment")
+    assert response.status_code == 400
+
+
+def test_confirm_cart_order_payment_fails_for_missing_order(client, register_user):
+    app_id, _ = _published_app(client, register_user, "cartconfirmmissing@example.com")
+
+    response = client.post(f"/api/apps/{app_id}/orders/999999/confirm-payment")
+    assert response.status_code == 404
