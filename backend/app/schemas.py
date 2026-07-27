@@ -439,6 +439,12 @@ class CouponValidateResponse(BaseModel):
 # ===== CATEGORY / ITEM SCHEMAS =====
 
 
+class ImportSummaryResponse(BaseModel):
+    created: int
+    skipped: int
+    message: Optional[str] = None
+
+
 class CategoryCreate(BaseModel):
     name: str
     order: int = 0

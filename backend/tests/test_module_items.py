@@ -1,4 +1,6 @@
-from app.models import ItemReview, ItemVariation
+import io
+
+from app.models import ItemReview, ItemVariation, ModuleItem
 
 
 def _published_app(client, register_user, email="items@example.com"):
@@ -134,3 +136,93 @@ def test_review_requires_login_and_is_upsert_not_duplicate(client, register_user
     item = next(i for i in items.json() if i["id"] == item_id)
     assert item["avg_rating"] == 3.0
     assert item["review_count"] == 1
+
+
+def test_export_items_csv_returns_all_fields(client, register_user):
+    app_id, headers = _published_app(client, register_user, "exportcsv@example.com")
+    category = client.post(
+        f"/api/apps/{app_id}/modules/catalogo/categories", json={"name": "Bebidas"}, headers=headers
+    )
+    category_id = category.json()["id"]
+    client.post(
+        f"/api/apps/{app_id}/modules/catalogo/items",
+        json={"name": "Refrigerante", "description": "Lata 350ml", "price": 6.0, "stock": 20, "category_id": category_id},
+        headers=headers,
+    )
+
+    response = client.get(f"/api/apps/{app_id}/modules/catalogo/items/export.csv", headers=headers)
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    body = response.text
+    assert "name,description,price,stock,category,image_url" in body
+    assert "Refrigerante,Lata 350ml,6.0,20,Bebidas," in body
+
+
+def test_export_items_csv_requires_owner(client, register_user):
+    app_id, headers = _published_app(client, register_user, "exportcsvowner@example.com")
+    other = register_user(email="exportcsvother@example.com")
+    other_headers = {"Authorization": f"Bearer {other['access_token']}"}
+
+    response = client.get(f"/api/apps/{app_id}/modules/catalogo/items/export.csv", headers=other_headers)
+    assert response.status_code == 404
+
+
+def test_import_items_csv_creates_items_and_categories(client, register_user, db_session):
+    app_id, headers = _published_app(client, register_user, "importcsv@example.com")
+
+    csv_content = (
+        "name,description,price,stock,category,image_url\n"
+        "Pizza Marguerita,Molho e queijo,35.0,10,Pizzas,\n"
+        "Coxinha,,8.5,,Salgados,https://example.com/coxinha.jpg\n"
+    )
+    files = {"file": ("catalogo.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
+    response = client.post(f"/api/apps/{app_id}/modules/catalogo/items/import.csv", headers=headers, files=files)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] == 2
+    assert body["skipped"] == 0
+
+    items = db_session.query(ModuleItem).filter(ModuleItem.app_id == app_id).all()
+    assert len(items) == 2
+    pizza = next(i for i in items if i.name == "Pizza Marguerita")
+    assert pizza.price == 35.0
+    assert pizza.stock == 10
+    coxinha = next(i for i in items if i.name == "Coxinha")
+    assert coxinha.stock is None
+    assert coxinha.image_url == "https://example.com/coxinha.jpg"
+
+    categories = client.get(f"/api/apps/{app_id}/modules/catalogo/categories", headers=headers).json()
+    assert {c["name"] for c in categories} == {"Pizzas", "Salgados"}
+
+
+def test_import_items_csv_skips_rows_without_name(client, register_user, db_session):
+    app_id, headers = _published_app(client, register_user, "importcsvskip@example.com")
+
+    csv_content = "name,price\nSanduiche,15.0\n,20.0\n"
+    files = {"file": ("catalogo.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
+    response = client.post(f"/api/apps/{app_id}/modules/catalogo/items/import.csv", headers=headers, files=files)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created"] == 1
+    assert body["skipped"] == 1
+
+    count = db_session.query(ModuleItem).filter(ModuleItem.app_id == app_id).count()
+    assert count == 1
+
+
+def test_import_items_csv_stops_at_plan_limit(client, register_user, db_session):
+    from app.models import User
+
+    app_id, headers = _published_app(client, register_user, "importcsvlimit@example.com")
+    user = db_session.query(User).filter(User.email == "importcsvlimit@example.com").first()
+    user.plan = "free"
+    db_session.commit()
+
+    csv_content = "name,price\n" + "".join(f"Item {i},{i}.0\n" for i in range(1, 15))
+    files = {"file": ("catalogo.csv", io.BytesIO(csv_content.encode("utf-8")), "text/csv")}
+    response = client.post(f"/api/apps/{app_id}/modules/catalogo/items/import.csv", headers=headers, files=files)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["created"] + body["skipped"] == 14
+    assert body["skipped"] > 0
+    assert body["message"] is not None

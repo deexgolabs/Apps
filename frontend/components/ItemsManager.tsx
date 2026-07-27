@@ -14,6 +14,8 @@ interface ItemsManagerProps {
   supportsCategories: boolean
 }
 
+const LOW_STOCK_THRESHOLD = 5
+
 export default function ItemsManager({ appId, moduleName, supportsCategories }: ItemsManagerProps) {
   const isAgenda = moduleName === 'agenda_interna'
   const [categories, setCategories] = useState<ModuleCategory[]>([])
@@ -39,6 +41,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const [variationPrice, setVariationPrice] = useState('')
   const [variationStock, setVariationStock] = useState('')
   const [variationGroup, setVariationGroup] = useState('')
+  const [importing, setImporting] = useState(false)
 
   const base = `/api/apps/${appId}/modules/${moduleName}`
 
@@ -203,6 +206,42 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
 
   const categoryName = (categoryId: number | null) =>
     categories.find((c) => c.id === categoryId)?.name
+
+  const handleExportCsv = async () => {
+    try {
+      const response = await api.get(`${base}/items/export.csv`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `catalogo_${moduleName}.csv`
+      link.click()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      toast.error('Erro ao exportar catálogo')
+    }
+  }
+
+  const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setImporting(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await api.post(`${base}/items/import.csv`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      toast.success(
+        `${response.data.created} item(ns) importado(s)${response.data.skipped ? `, ${response.data.skipped} ignorado(s)` : ''}!`
+      )
+      await fetchAll()
+    } catch (error: any) {
+      showApiError(error, 'Erro ao importar catálogo')
+    } finally {
+      setImporting(false)
+    }
+  }
 
   if (loading) {
     return <p className="text-sm text-gray-500">Carregando...</p>
@@ -420,7 +459,24 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       </div>
 
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Itens ({items.length})</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-medium text-gray-700">Itens ({items.length})</p>
+          {!isAgenda && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50"
+              >
+                ⬇ Exportar CSV
+              </button>
+              <label className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50 cursor-pointer">
+                {importing ? 'Importando...' : '⬆ Importar CSV'}
+                <input type="file" accept=".csv" onChange={handleImportCsv} disabled={importing} className="hidden" />
+              </label>
+            </div>
+          )}
+        </div>
         <div className="space-y-2">
           {items.length === 0 ? (
             <p className="text-sm text-gray-400 italic">Nenhum item ainda</p>
@@ -447,6 +503,12 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                       )}
                       {item.stock != null && (
                         <span className="text-gray-500 font-normal"> · estoque: {item.stock}</span>
+                      )}
+                      {item.stock != null && item.stock <= 0 && (
+                        <span className="ml-1 text-[11px] font-semibold text-red-600">🔴 Esgotado</span>
+                      )}
+                      {item.stock != null && item.stock > 0 && item.stock <= LOW_STOCK_THRESHOLD && (
+                        <span className="ml-1 text-[11px] font-semibold text-amber-600">⚠ Estoque baixo</span>
                       )}
                       {item.variations?.length > 0 && (
                         <span className="text-gray-500 font-normal"> · {item.variations.length} variação(ões)</span>
