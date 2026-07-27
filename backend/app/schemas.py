@@ -358,6 +358,7 @@ class OrderResponse(BaseModel):
 class CartItemInput(BaseModel):
     item_id: int
     variation_id: Optional[int] = None
+    variation_ids: List[int] = []
     quantity: int = 1
 
 
@@ -463,6 +464,7 @@ class VariationCreate(BaseModel):
     price: float
     stock: Optional[int] = None
     order: int = 0
+    group_name: Optional[str] = None
 
 
 class VariationUpdate(BaseModel):
@@ -470,6 +472,7 @@ class VariationUpdate(BaseModel):
     price: Optional[float] = None
     stock: Optional[int] = None
     order: Optional[int] = None
+    group_name: Optional[str] = None
 
 
 class VariationResponse(BaseModel):
@@ -479,6 +482,7 @@ class VariationResponse(BaseModel):
     price: float
     stock: Optional[int] = None
     order: int
+    group_name: Optional[str] = None
 
     class Config:
         from_attributes = True

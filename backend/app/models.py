@@ -239,9 +239,11 @@ class ModuleItem(Base):
 
 
 class ItemVariation(Base):
-    """Variação de um item (tamanho, sabor, cor) com preço absoluto próprio —
-    quando um item tem variações, ModuleItem.price/stock viram só 'a partir de'
-    e o checkout passa a exigir variation_id."""
+    """Variação de um item (tamanho, sabor, cor). Sem group_name, o preço é
+    absoluto e o cliente escolhe uma única variação do item (comportamento
+    original). Com group_name, a variação pertence a um grupo combinável
+    (ex: 'Tamanho', 'Sabor') — o preço vira delta somado ao preço base do
+    item, e o cliente escolhe uma opção por grupo (Fase D)."""
     __tablename__ = "item_variations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -250,6 +252,7 @@ class ItemVariation(Base):
     price = Column(Float, nullable=False)
     stock = Column(Integer, nullable=True)
     order = Column(Integer, default=0)
+    group_name = Column(String, nullable=True)
 
 
 class ItemReview(Base):

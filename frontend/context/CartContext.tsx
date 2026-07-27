@@ -7,7 +7,10 @@ import type { ItemVariation, OrderItem } from '@/types'
 
 export interface CartItem {
   item_id: number
-  variation_id: number | null
+  /** IDs das variações escolhidas, ordenados — vazio se o item não tem
+   * variação, um item se é o fluxo antigo (preço absoluto), vários se é um
+   * combo de grupos (Fase D, preço em delta somado ao preço base). */
+  variation_ids: number[]
   module_name: string
   name: string
   unit_price: number
@@ -16,21 +19,25 @@ export interface CartItem {
   stock: number | null
 }
 
+function variationKey(ids: number[]): string {
+  return [...ids].sort((a, b) => a - b).join(',')
+}
+
 interface CartContextValue {
   items: CartItem[]
   addItem: (
     moduleName: string,
     item: {
       id: number
-      variation_id?: number | null
+      variation_ids?: number[]
       name: string
       price: number | null
       image_url: string | null
       stock: number | null
     }
   ) => void
-  removeItem: (itemId: number, variationId?: number | null) => void
-  setQuantity: (itemId: number, quantity: number, variationId?: number | null) => void
+  removeItem: (itemId: number, variationIds?: number[]) => void
+  setQuantity: (itemId: number, quantity: number, variationIds?: number[]) => void
   clear: () => void
   subtotal: number
   count: number
@@ -63,23 +70,23 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
   }, [appId, items])
 
   const addItem: CartContextValue['addItem'] = (moduleName, item) => {
-    const variationId = item.variation_id ?? null
+    const variationIds = variationKey(item.variation_ids || [])
     setItems((prev) => {
       if (prev.length > 0 && prev[0].module_name !== moduleName) {
         toast.error('Finalize ou limpe o carrinho atual antes de adicionar itens de outro módulo.')
         return prev
       }
-      const existing = prev.find((i) => i.item_id === item.id && i.variation_id === variationId)
+      const existing = prev.find((i) => i.item_id === item.id && variationKey(i.variation_ids) === variationIds)
       if (existing) {
         return prev.map((i) =>
-          i.item_id === item.id && i.variation_id === variationId ? { ...i, quantity: i.quantity + 1 } : i
+          i.item_id === item.id && variationKey(i.variation_ids) === variationIds ? { ...i, quantity: i.quantity + 1 } : i
         )
       }
       return [
         ...prev,
         {
           item_id: item.id,
-          variation_id: variationId,
+          variation_ids: item.variation_ids || [],
           module_name: moduleName,
           name: item.name,
           unit_price: item.price || 0,
@@ -91,17 +98,19 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
     })
   }
 
-  const removeItem = (itemId: number, variationId: number | null = null) => {
-    setItems((prev) => prev.filter((i) => !(i.item_id === itemId && i.variation_id === variationId)))
+  const removeItem = (itemId: number, variationIds: number[] = []) => {
+    const key = variationKey(variationIds)
+    setItems((prev) => prev.filter((i) => !(i.item_id === itemId && variationKey(i.variation_ids) === key)))
   }
 
-  const setQuantity = (itemId: number, quantity: number, variationId: number | null = null) => {
+  const setQuantity = (itemId: number, quantity: number, variationIds: number[] = []) => {
     if (quantity < 1) {
-      removeItem(itemId, variationId)
+      removeItem(itemId, variationIds)
       return
     }
+    const key = variationKey(variationIds)
     setItems((prev) =>
-      prev.map((i) => (i.item_id === itemId && i.variation_id === variationId ? { ...i, quantity } : i))
+      prev.map((i) => (i.item_id === itemId && variationKey(i.variation_ids) === key ? { ...i, quantity } : i))
     )
   }
 
@@ -124,6 +133,9 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
         if (oi.module_item_id == null) continue
         const current = currentById.get(oi.module_item_id)
         if (!current) continue
+        // combos (mais de uma variação por linha) não guardam item_variation_id
+        // no pedido — "pedir de novo" volta pro preço base nesse caso, já que
+        // não dá pra saber quais variações exatas foram escolhidas.
         const variation = oi.item_variation_id
           ? current.variations.find((v) => v.id === oi.item_variation_id)
           : undefined
@@ -132,7 +144,7 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
         if (oi.item_variation_id && !variation) continue
         restored.push({
           item_id: current.id,
-          variation_id: variation ? variation.id : null,
+          variation_ids: variation ? [variation.id] : [],
           module_name: moduleName,
           name: variation ? `${current.name} (${variation.name})` : current.name,
           unit_price: (variation ? variation.price : current.price) || 0,

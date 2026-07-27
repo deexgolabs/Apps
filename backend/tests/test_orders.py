@@ -396,3 +396,84 @@ def test_confirm_cart_order_payment_fails_for_missing_order(client, register_use
 
     response = client.post(f"/api/apps/{app_id}/orders/999999/confirm-payment")
     assert response.status_code == 404
+
+
+def _create_grouped_variation(client, app_id, owner_headers, item_id, name, price, group_name, stock=None):
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/items/{item_id}/variations",
+        json={"name": name, "price": price, "group_name": group_name, "stock": stock},
+        headers=owner_headers,
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+def test_cart_checkout_combines_grouped_variations_as_delta_price(client, register_user, db_session):
+    """Fase D: variações com group_name são somadas como delta ao preço base
+    do item (não substituem, como no fluxo antigo de variação única) — o
+    cliente escolhe uma opção de cada grupo (tamanho + sabor)."""
+    app_id, owner_headers = _published_app(client, register_user, "combovariation@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    grande_id = _create_grouped_variation(client, app_id, owner_headers, item_id, "Grande", 10.0, "Tamanho", stock=5)
+    _create_grouped_variation(client, app_id, owner_headers, item_id, "Pequena", 0.0, "Tamanho", stock=5)
+    chocolate_id = _create_grouped_variation(client, app_id, owner_headers, item_id, "Chocolate", 5.0, "Sabor", stock=3)
+    _create_grouped_variation(client, app_id, owner_headers, item_id, "Morango", 0.0, "Sabor", stock=3)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "variation_ids": [grande_id, chocolate_id], "quantity": 1}],
+            "customer": {"nome": "Cliente"},
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    # 30 (base) + 10 (Grande) + 5 (Chocolate) = 45
+    assert body["subtotal"] == 45.0
+    assert "Grande" in body["items"][0]["name"]
+    assert "Chocolate" in body["items"][0]["name"]
+
+    grande = db_session.query(ItemVariation).filter(ItemVariation.id == grande_id).first()
+    chocolate = db_session.query(ItemVariation).filter(ItemVariation.id == chocolate_id).first()
+    assert grande.stock == 4  # decrementado
+    assert chocolate.stock == 2  # decrementado
+    base_item = db_session.query(ModuleItem).filter(ModuleItem.id == item_id).first()
+    assert base_item.stock is None  # item base sem estoque próprio não é mexido
+
+
+def test_cart_checkout_rejects_two_selections_from_same_group(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "combogroupclash@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    grande_id = _create_grouped_variation(client, app_id, owner_headers, item_id, "Grande", 10.0, "Tamanho")
+    media_id = _create_grouped_variation(client, app_id, owner_headers, item_id, "Média", 5.0, "Tamanho")
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "variation_ids": [grande_id, media_id], "quantity": 1}],
+            "customer": {},
+        },
+    )
+    assert response.status_code == 400
+
+
+def test_cart_checkout_rejects_combo_with_insufficient_stock(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "combostock@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    grande_id = _create_grouped_variation(client, app_id, owner_headers, item_id, "Grande", 10.0, "Tamanho", stock=1)
+    chocolate_id = _create_grouped_variation(client, app_id, owner_headers, item_id, "Chocolate", 5.0, "Sabor", stock=3)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "variation_ids": [grande_id, chocolate_id], "quantity": 2}],
+            "customer": {},
+        },
+    )
+    assert response.status_code == 409
+
+    grande = db_session.query(ItemVariation).filter(ItemVariation.id == grande_id).first()
+    assert grande.stock == 1  # não decrementado — checkout inteiro falhou

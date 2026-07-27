@@ -57,7 +57,7 @@ export default function CartDrawer({
         ) : (
           <div className="space-y-3">
             {cart.items.map((item) => (
-              <div key={`${item.item_id}-${item.variation_id ?? ''}`} className="flex items-center gap-2 border-b border-gray-100 pb-2">
+              <div key={`${item.item_id}-${item.variation_ids.join(',')}`} className="flex items-center gap-2 border-b border-gray-100 pb-2">
                 {item.image_url && (
                   <img src={item.image_url} alt="" className="w-10 h-10 object-cover rounded flex-shrink-0" />
                 )}
@@ -68,7 +68,7 @@ export default function CartDrawer({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => cart.setQuantity(item.item_id, item.quantity - 1, item.variation_id)}
+                    onClick={() => cart.setQuantity(item.item_id, item.quantity - 1, item.variation_ids)}
                     className="w-6 h-6 rounded bg-gray-100 text-gray-700 text-sm"
                   >
                     −
@@ -76,7 +76,7 @@ export default function CartDrawer({
                   <span className="text-sm w-5 text-center">{item.quantity}</span>
                   <button
                     type="button"
-                    onClick={() => cart.setQuantity(item.item_id, item.quantity + 1, item.variation_id)}
+                    onClick={() => cart.setQuantity(item.item_id, item.quantity + 1, item.variation_ids)}
                     disabled={item.stock !== null && item.quantity >= item.stock}
                     className="w-6 h-6 rounded bg-gray-100 text-gray-700 text-sm disabled:opacity-40"
                   >

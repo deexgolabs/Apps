@@ -186,42 +186,75 @@ async def create_cart_checkout(
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item {cart_item.item_id} não encontrado")
 
-        variation = None
-        if cart_item.variation_id is not None:
-            variation = (
+        # variation_ids (plural) é o combo de grupos combináveis (Fase D) — ex:
+        # tamanho + sabor, uma opção por grupo, preço de cada uma somado como
+        # delta ao preço base. variation_id (singular) continua servindo o
+        # fluxo antigo de variação única com preço absoluto, sem grupo.
+        selected_ids = list(dict.fromkeys(cart_item.variation_ids or ([cart_item.variation_id] if cart_item.variation_id else [])))
+        selected_variations: List[ItemVariation] = []
+        if selected_ids:
+            selected_variations = (
                 db.query(ItemVariation)
-                .filter(ItemVariation.id == cart_item.variation_id, ItemVariation.item_id == item.id)
-                .first()
+                .filter(ItemVariation.id.in_(selected_ids), ItemVariation.item_id == item.id)
+                .all()
             )
-            if not variation:
+            if len(selected_variations) != len(selected_ids):
+                found_ids = {v.id for v in selected_variations}
+                missing = next(i for i in selected_ids if i not in found_ids)
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Variação {missing} não encontrada")
+
+            seen_groups: dict = {}
+            for v in selected_variations:
+                if v.group_name is not None:
+                    if v.group_name in seen_groups:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Só é possível escolher uma opção do grupo '{v.group_name}'",
+                        )
+                    seen_groups[v.group_name] = v.id
+
+        is_combo = len(selected_variations) > 1 or any(v.group_name is not None for v in selected_variations)
+
+        for v in selected_variations:
+            if v.stock is not None and v.stock < cart_item.quantity:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Variação {cart_item.variation_id} não encontrada",
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Estoque insuficiente para '{item.name} ({v.name})' (disponível: {v.stock})",
                 )
 
-        stocked_entity = variation or item
-        item_name = f"{item.name} ({variation.name})" if variation else item.name
-        if stocked_entity.stock is not None and stocked_entity.stock < cart_item.quantity:
+        if is_combo:
+            unit_price = (item.price or 0.0) + sum(v.price for v in selected_variations)
+            item_name = f"{item.name} ({', '.join(v.name for v in selected_variations)})" if selected_variations else item.name
+        elif selected_variations:
+            unit_price = selected_variations[0].price or 0.0
+            item_name = f"{item.name} ({selected_variations[0].name})"
+        else:
+            unit_price = item.price or 0.0
+            item_name = item.name
+
+        if not selected_variations and item.stock is not None and item.stock < cart_item.quantity:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Estoque insuficiente para '{item_name}' (disponível: {stocked_entity.stock})",
+                detail=f"Estoque insuficiente para '{item_name}' (disponível: {item.stock})",
             )
 
-        unit_price = (variation.price if variation else item.price) or 0.0
         item_subtotal = unit_price * cart_item.quantity
         subtotal += item_subtotal
         order_items.append(
             OrderItem(
                 module_item_id=item.id,
-                item_variation_id=variation.id if variation else None,
+                item_variation_id=selected_variations[0].id if len(selected_variations) == 1 else None,
                 name=item_name,
                 unit_price=unit_price,
                 quantity=cart_item.quantity,
                 subtotal=item_subtotal,
             )
         )
-        if stocked_entity.stock is not None:
-            items_to_decrement.append((stocked_entity, cart_item.quantity))
+        for v in selected_variations:
+            if v.stock is not None:
+                items_to_decrement.append((v, cart_item.quantity))
+        if not selected_variations and item.stock is not None:
+            items_to_decrement.append((item, cart_item.quantity))
 
     entrega_settings = _get_module_settings(app_id, "pagamento_entrega", db)
 

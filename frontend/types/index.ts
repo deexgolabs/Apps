@@ -47,6 +47,7 @@ export interface ItemVariation {
   price: number
   stock: number | null
   order: number
+  group_name: string | null
 }
 
 export interface ItemReview {

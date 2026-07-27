@@ -30,7 +30,7 @@ import {
   parseCustomFields,
 } from '@/lib/moduleFields'
 import ModuleIcon from '@/components/ModuleIcon'
-import type { Module, ModuleCategory, ModuleItem, Order } from '@/types'
+import type { ItemVariation, Module, ModuleCategory, ModuleItem, Order } from '@/types'
 import toast from 'react-hot-toast'
 import { showApiError } from '@/lib/apiError'
 import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
@@ -294,7 +294,7 @@ function ListModuleContent({
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
-  const [selectedVariation, setSelectedVariation] = useState<Record<number, number>>({})
+  const [selectedVariations, setSelectedVariations] = useState<Record<number, number[]>>({})
   const supportsCategories = LIST_MODULES[moduleName]
   const searchEnabled = cartEnabled && mode === 'public'
 
@@ -330,41 +330,74 @@ function ListModuleContent({
   const isAgenda = moduleName === 'agenda_interna'
   const isGrid = layout === 'grid'
 
+  // group_name null vira uma chave própria — trata todas as variações soltas
+  // (fluxo antigo) como um único grupo que exige uma escolha, igual antes.
+  const groupKeyOf = (v: ItemVariation) => v.group_name ?? '__none__'
+
+  const selectedVariationObjs = (item: ModuleItem) =>
+    (selectedVariations[item.id] || [])
+      .map((id) => item.variations.find((v) => v.id === id))
+      .filter((v): v is ItemVariation => !!v)
+
+  const isCombo = (item: ModuleItem) => {
+    const sel = selectedVariationObjs(item)
+    return sel.length > 1 || sel.some((v) => v.group_name != null)
+  }
+
   const outOfStock = (item: ModuleItem) => {
     if (item.variations.length > 0) {
-      const v = item.variations.find((v) => v.id === selectedVariation[item.id])
-      return v ? v.stock !== null && v.stock <= 0 : item.variations.every((v) => v.stock !== null && v.stock <= 0)
+      const sel = selectedVariationObjs(item)
+      if (sel.length > 0) return sel.some((v) => v.stock !== null && v.stock <= 0)
+      return item.variations.every((v) => v.stock !== null && v.stock <= 0)
     }
     return item.stock !== null && item.stock <= 0
   }
 
   const effectivePrice = (item: ModuleItem) => {
     if (item.variations.length > 0) {
-      const v = item.variations.find((v) => v.id === selectedVariation[item.id])
-      return v ? v.price : item.variations[0]?.price ?? item.price
+      const sel = selectedVariationObjs(item)
+      if (sel.length === 0) return item.variations[0]?.price ?? item.price
+      if (isCombo(item)) return (item.price || 0) + sel.reduce((sum, v) => sum + v.price, 0)
+      return sel[0].price
     }
     return item.extra?.promo_price ?? item.price
   }
 
+  const handleSelectVariation = (item: ModuleItem, v: ItemVariation) => {
+    setSelectedVariations((prev) => {
+      const current = prev[item.id] || []
+      const filtered = current.filter((id) => {
+        const existing = item.variations.find((iv) => iv.id === id)
+        return existing ? groupKeyOf(existing) !== groupKeyOf(v) : true
+      })
+      return { ...prev, [item.id]: [...filtered, v.id] }
+    })
+  }
+
   const addToCartButton = (item: ModuleItem) => {
     if (!cartEnabled || !cart) return null
-    const needsVariation = item.variations.length > 0 && !selectedVariation[item.id]
+    const sel = selectedVariationObjs(item)
+    const requiredGroups = Array.from(new Set(item.variations.map(groupKeyOf)))
+    const selectedGroups = new Set(sel.map(groupKeyOf))
+    const needsVariation = item.variations.length > 0 && requiredGroups.some((g) => !selectedGroups.has(g))
+    const trackedStocks = sel.filter((v) => v.stock !== null).map((v) => v.stock as number)
+    const stockLimit = sel.length > 0 ? (trackedStocks.length > 0 ? Math.min(...trackedStocks) : null) : item.stock
     return (
       <button
         type="button"
         disabled={outOfStock(item) || needsVariation}
         onClick={() => {
-          const variation = item.variations.find((v) => v.id === selectedVariation[item.id])
+          const name = sel.length > 0 ? `${item.name} (${sel.map((v) => v.name).join(', ')})` : item.name
           cart.addItem(moduleName, {
             id: item.id,
-            variation_id: variation ? variation.id : null,
-            name: variation ? `${item.name} (${variation.name})` : item.name,
+            variation_ids: sel.map((v) => v.id),
+            name,
             price: effectivePrice(item),
             image_url: item.image_url,
-            stock: variation ? variation.stock : item.stock,
+            stock: stockLimit,
           })
         }}
-        title={needsVariation ? 'Escolha uma variação' : undefined}
+        title={needsVariation ? 'Escolha uma opção em cada grupo' : undefined}
         className="shrink-0 text-xs font-semibold px-2 py-1 rounded bg-indigo-600 text-white disabled:opacity-40 disabled:bg-gray-400"
       >
         {outOfStock(item) ? 'Esgotado' : '+ Adicionar'}
@@ -375,7 +408,18 @@ function ListModuleContent({
   const priceDisplay = (item: ModuleItem) => {
     const promo = item.extra?.promo_price
     if (item.variations.length > 0) {
-      const minPrice = Math.min(...item.variations.map((v) => v.price))
+      const hasGroups = item.variations.some((v) => v.group_name != null)
+      let minPrice: number
+      if (hasGroups) {
+        // menor combo possível: preço base + a opção mais barata de cada grupo
+        const groups = new Set(item.variations.map(groupKeyOf))
+        minPrice = (item.price || 0) + Array.from(groups).reduce((sum, g) => {
+          const cheapest = Math.min(...item.variations.filter((v) => groupKeyOf(v) === g).map((v) => v.price))
+          return sum + cheapest
+        }, 0)
+      } else {
+        minPrice = Math.min(...item.variations.map((v) => v.price))
+      }
       return <span className="text-gray-500 font-normal"> · a partir de R$ {minPrice.toFixed(2)}</span>
     }
     if (promo != null && item.price != null) {
@@ -405,8 +449,8 @@ function ListModuleContent({
         {item.variations.length > 0 && (
           <VariationPicker
             variations={item.variations}
-            selectedId={selectedVariation[item.id] ?? null}
-            onSelect={(v) => setSelectedVariation((prev) => ({ ...prev, [item.id]: v.id }))}
+            selectedIds={selectedVariations[item.id] || []}
+            onSelect={(v) => handleSelectVariation(item, v)}
           />
         )}
         {mode === 'public' && <ItemReviews appId={appId} moduleName={moduleName} itemId={item.id} />}

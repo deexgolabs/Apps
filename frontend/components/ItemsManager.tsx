@@ -38,6 +38,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const [variationName, setVariationName] = useState('')
   const [variationPrice, setVariationPrice] = useState('')
   const [variationStock, setVariationStock] = useState('')
+  const [variationGroup, setVariationGroup] = useState('')
 
   const base = `/api/apps/${appId}/modules/${moduleName}`
 
@@ -103,6 +104,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setVariationName('')
     setVariationPrice('')
     setVariationStock('')
+    setVariationGroup('')
   }
 
   const startEditItem = async (item: ModuleItem) => {
@@ -178,6 +180,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
         price: parseFloat(variationPrice),
         stock: variationStock.trim() ? parseInt(variationStock, 10) : null,
         order: variations.length,
+        group_name: variationGroup.trim() || null,
       })
       setVariations([...variations, response.data])
       setVariationName('')
@@ -335,13 +338,17 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
           {editingId && !isAgenda && (
             <div className="border-t border-gray-200 pt-2 mt-2">
               <p className="text-xs font-semibold text-gray-600 mb-1.5">
-                Variações (tamanho, sabor, cor...) — quando existem, o preço/estoque acima é ignorado
+                Variações (tamanho, sabor, cor...) — quando existem, o preço/estoque acima é ignorado.
+                Preencha "Grupo" pra combinar (ex: Tamanho + Sabor); o cliente escolhe uma opção por
+                grupo e o preço de cada uma soma como adicional ao preço base do item.
               </p>
               <div className="space-y-1.5 mb-2">
                 {variations.map((v) => (
                   <div key={v.id} className="flex items-center justify-between text-xs border border-gray-200 rounded px-2 py-1">
                     <span>
-                      {v.name} · R$ {v.price.toFixed(2)} {v.stock != null && `· estoque: ${v.stock}`}
+                      {v.group_name && <span className="text-indigo-600 font-medium">[{v.group_name}] </span>}
+                      {v.name} · {v.group_name ? `+ R$ ${v.price.toFixed(2)}` : `R$ ${v.price.toFixed(2)}`}{' '}
+                      {v.stock != null && `· estoque: ${v.stock}`}
                     </span>
                     <button type="button" onClick={() => handleRemoveVariation(v.id)} className="text-gray-400 hover:text-red-600">
                       ×
@@ -349,6 +356,13 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                   </div>
                 ))}
               </div>
+              <input
+                type="text"
+                value={variationGroup}
+                onChange={(e) => setVariationGroup(e.target.value)}
+                placeholder="Grupo (opcional — ex: Tamanho)"
+                className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-1.5"
+              />
               <div className="grid grid-cols-3 gap-1.5">
                 <input
                   type="text"
@@ -362,7 +376,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                   step="0.01"
                   value={variationPrice}
                   onChange={(e) => setVariationPrice(e.target.value)}
-                  placeholder="Preço"
+                  placeholder={variationGroup.trim() ? 'Adicional (R$)' : 'Preço'}
                   className="px-2 py-1 text-xs border border-gray-300 rounded"
                 />
                 <input

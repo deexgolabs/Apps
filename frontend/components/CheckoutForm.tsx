@@ -100,7 +100,7 @@ export default function CheckoutForm({
       const response = await publicApi.post(
         `/api/apps/${appId}/modules/${cart.cartModuleName}/cart-checkout`,
         {
-          items: cart.items.map((i) => ({ item_id: i.item_id, variation_id: i.variation_id, quantity: i.quantity })),
+          items: cart.items.map((i) => ({ item_id: i.item_id, variation_ids: i.variation_ids, quantity: i.quantity })),
           customer: { ...values, ...(fulfillment === 'delivery' ? { cep } : {}) },
           coupon_code: couponInput.trim() || undefined,
           fulfillment_type: fulfillment,
