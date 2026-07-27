@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -120,15 +120,19 @@ def _get_module_settings(app_id: int, module_name: str, db: Session) -> dict:
     return row.settings if row and row.settings else {}
 
 
-async def _start_gateway_checkout(gateway: str, settings: dict, valor: float, titulo: str, order_id: int) -> tuple[str | None, str | None]:
+async def _start_gateway_checkout(
+    gateway: str, settings: dict, valor: float, titulo: str, order_id: int, notification_url: str | None = None
+) -> tuple[str | None, str | None]:
     """Abre uma cobrança na gateway pelo valor real do carrinho — diferente do
     fluxo de módulo de pagamento avulso (routes/payments.py), que usa um valor
-    fixo configurado nas settings. Devolve (checkout_url, payment_reference)."""
+    fixo configurado nas settings. Devolve (checkout_url, payment_reference).
+    notification_url (quando suportado pela gateway) faz o pagamento confirmar
+    sozinho via webhook, sem depender do cliente voltar e chamar /confirm-payment."""
     if gateway == "mercado_pago":
         access_token = settings.get("access_token")
         if not access_token:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Módulo não configurado: falta o access_token do Mercado Pago")
-        result = await checkout_mercado_pago(valor, titulo, access_token, external_reference=str(order_id))
+        result = await checkout_mercado_pago(valor, titulo, access_token, external_reference=str(order_id), notification_url=notification_url)
         return result.get("checkout_url"), str(order_id)
     if gateway == "paypal":
         client_id = settings.get("client_id")
@@ -141,9 +145,20 @@ async def _start_gateway_checkout(gateway: str, settings: dict, valor: float, ti
         token = settings.get("token")
         if not token:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Módulo não configurado: falta o token do PagSeguro")
-        result = await checkout_pagseguro(valor, titulo, token)
+        result = await checkout_pagseguro(valor, titulo, token, notification_url=notification_url)
         return result.get("checkout_url"), result.get("gateway_order_id")
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gateway de pagamento inválida")
+
+
+def _mark_order_confirmed(order: Order, app: App, db: Session) -> None:
+    """Marca o pedido como confirmed e avisa o cliente — usado tanto pelo
+    confirm-payment manual (cliente volta do checkout) quanto pelos webhooks
+    das gateways (confirmação automática, sem depender do cliente voltar)."""
+    order.status = "confirmed"
+    _record_status_event(order, db)
+    db.commit()
+    db.refresh(order)
+    _notify_customer_status_change(app, order, db)
 
 
 async def _verify_gateway_payment(gateway: str, settings: dict, payment_reference: str) -> bool:
@@ -194,6 +209,7 @@ async def create_cart_checkout(
     app_id: int,
     module_name: str,
     payload: CartCheckoutRequest,
+    request: Request,
     db: Session = Depends(get_db),
     end_user: Optional[AppUser] = Depends(get_optional_end_user),
 ):
@@ -367,8 +383,11 @@ async def create_cart_checkout(
     checkout_url = None
     if payload.gateway:
         gateway_settings = _get_module_settings(app_id, payload.gateway, db)
+        scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+        host = request.headers.get("x-forwarded-host", request.headers.get("host", request.url.netloc))
+        notification_url = f"{scheme}://{host}/api/apps/{app_id}/webhooks/{payload.gateway}?order_id={order.id}"
         checkout_url, payment_reference = await _start_gateway_checkout(
-            payload.gateway, gateway_settings, total, app.name, order.id
+            payload.gateway, gateway_settings, total, app.name, order.id, notification_url=notification_url
         )
         order.payment_reference = payment_reference
         db.commit()
@@ -396,11 +415,7 @@ async def confirm_cart_order_payment(app_id: int, order_id: int, db: Session = D
         approved = await _verify_gateway_payment(order.payment_method, settings, order.payment_reference)
         if approved:
             app = db.query(App).filter(App.id == app_id).first()
-            order.status = "confirmed"
-            _record_status_event(order, db)
-            db.commit()
-            db.refresh(order)
-            _notify_customer_status_change(app, order, db)
+            _mark_order_confirmed(order, app, db)
 
     return order
 

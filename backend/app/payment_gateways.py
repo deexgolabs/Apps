@@ -5,10 +5,18 @@ import httpx
 from fastapi import HTTPException, status
 
 
-async def checkout_mercado_pago(valor: float, titulo: str, access_token: str, external_reference: str | None = None) -> dict:
+async def checkout_mercado_pago(
+    valor: float,
+    titulo: str,
+    access_token: str,
+    external_reference: str | None = None,
+    notification_url: str | None = None,
+) -> dict:
     payload = {"items": [{"title": titulo, "quantity": 1, "unit_price": valor, "currency_id": "BRL"}]}
     if external_reference:
         payload["external_reference"] = external_reference
+    if notification_url:
+        payload["notification_url"] = notification_url
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
@@ -133,12 +141,16 @@ async def verify_paypal(paypal_order_id: str, client_id: str, client_secret: str
     return capture_response.json().get("status") == "COMPLETED"
 
 
-async def checkout_pagseguro(valor: float, titulo: str, token: str) -> dict:
+async def checkout_pagseguro(valor: float, titulo: str, token: str, notification_url: str | None = None) -> dict:
+    payload = {"items": [{"name": titulo, "quantity": 1, "unit_amount": int(valor * 100)}]}
+    if notification_url:
+        payload["notification_urls"] = [notification_url]
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             "https://sandbox.api.pagseguro.com/orders",
             headers={"Authorization": f"Bearer {token}"},
-            json={"items": [{"name": titulo, "quantity": 1, "unit_amount": int(valor * 100)}]},
+            json=payload,
         )
 
     if response.status_code >= 400:
