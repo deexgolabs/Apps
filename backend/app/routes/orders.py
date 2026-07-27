@@ -13,7 +13,7 @@ from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.email_utils import send_email
-from app.models import App, AppConfig, AppUser, ItemVariation, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
+from app.models import App, AppConfig, AppUser, ItemVariation, LoyaltyAccount, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
 from app.payment_gateways import (
     checkout_mercado_pago,
     checkout_pagseguro,
@@ -78,6 +78,36 @@ def _notify_owner_order_cancelled(app: App, order: Order, db: Session) -> None:
         )
     except Exception:
         logger.exception("Falha ao enviar e-mail de cancelamento para %s", owner.email)
+
+
+def _credit_loyalty_points(app_id: int, order: Order, db: Session) -> None:
+    """Credita pontos de fidelidade quando um pedido passa a completed, com
+    base em pontos_por_real configurado no módulo cartao_fidelidade. Só se
+    aplica a pedidos de clientes logados (end_user_id) e só uma vez por
+    pedido — o caller garante que o status anterior não era completed."""
+    if not order.end_user_id:
+        return
+    settings = _get_module_settings(app_id, "cartao_fidelidade", db)
+    try:
+        pontos_por_real = float(settings.get("pontos_por_real") or 0)
+    except (TypeError, ValueError):
+        return
+    if pontos_por_real <= 0:
+        return
+    points_earned = int((order.amount or 0) * pontos_por_real)
+    if points_earned <= 0:
+        return
+
+    account = (
+        db.query(LoyaltyAccount)
+        .filter(LoyaltyAccount.app_id == app_id, LoyaltyAccount.end_user_id == order.end_user_id)
+        .first()
+    )
+    if account:
+        account.points += points_earned
+    else:
+        db.add(LoyaltyAccount(app_id=app_id, end_user_id=order.end_user_id, points=points_earned))
+    db.commit()
 
 
 def _get_module_settings(app_id: int, module_name: str, db: Session) -> dict:
@@ -452,6 +482,7 @@ async def close_table(
 
     for order in orders:
         db.refresh(order)
+        _credit_loyalty_points(app_id, order, db)
         _notify_customer_status_change(app, order, db)
 
     return orders
@@ -474,11 +505,15 @@ async def update_order(
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
 
+    old_status = order.status
     if order_update.status != order.status:
         order.status = order_update.status
         _record_status_event(order, db)
     db.commit()
     db.refresh(order)
+
+    if order.status == "completed" and old_status != "completed":
+        _credit_loyalty_points(app_id, order, db)
 
     _notify_customer_status_change(app, order, db)
     return order

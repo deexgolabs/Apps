@@ -148,6 +148,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         FormSubmission,
         ItemReview,
         ItemVariation,
+        LoyaltyAccount,
         ModuleCategory,
         ModuleItem,
         Order,
@@ -155,6 +156,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         OrderStatusEvent,
         PushSendLog,
         PushSubscription,
+        WishlistItem,
     )
 
     item_ids = [row.id for row in db.query(ModuleItem.id).filter(ModuleItem.app_id == app_id).all()]
@@ -171,6 +173,8 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
     db.query(PushSendLog).filter(PushSendLog.app_id == app_id).delete(synchronize_session=False)
     db.query(PushSubscription).filter(PushSubscription.app_id == app_id).delete(synchronize_session=False)
     db.query(Coupon).filter(Coupon.app_id == app_id).delete(synchronize_session=False)
+    db.query(LoyaltyAccount).filter(LoyaltyAccount.app_id == app_id).delete(synchronize_session=False)
+    db.query(WishlistItem).filter(WishlistItem.app_id == app_id).delete(synchronize_session=False)
     db.query(ModuleItem).filter(ModuleItem.app_id == app_id).delete(synchronize_session=False)
     db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).delete(synchronize_session=False)
     db.query(AppUser).filter(AppUser.app_id == app_id).delete(synchronize_session=False)

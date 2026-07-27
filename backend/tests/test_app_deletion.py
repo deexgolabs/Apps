@@ -5,11 +5,13 @@ from app.models import (
     FormSubmission,
     ItemReview,
     ItemVariation,
+    LoyaltyAccount,
     ModuleCategory,
     ModuleItem,
     Order,
     OrderItem,
     PushSubscription,
+    WishlistItem,
 )
 
 
@@ -88,6 +90,26 @@ def test_delete_app_removes_all_child_rows(client, register_user, db_session):
     )
     assert coupon.status_code == 201, coupon.text
 
+    wishlist = client.post(
+        f"/api/apps/{app_id}/modules/catalogo/items/{item_id}/wishlist",
+        headers=end_user_headers,
+    )
+    assert wishlist.status_code == 200, wishlist.text
+
+    config = client.put(
+        f"/api/apps/{app_id}/module-config/cartao_fidelidade",
+        json={"settings": {"pontos_por_real": 1}},
+        headers=headers,
+    )
+    assert config.status_code == 200, config.text
+    order_id = checkout.json()["id"]
+    completed = client.put(
+        f"/api/apps/{app_id}/orders/{order_id}",
+        json={"status": "completed"},
+        headers=headers,
+    )
+    assert completed.status_code == 200, completed.text
+
     submission = client.post(
         f"/api/apps/{app_id}/modules/fale_conosco/submissions",
         json={"data": {"nome": "Visitante"}},
@@ -117,3 +139,5 @@ def test_delete_app_removes_all_child_rows(client, register_user, db_session):
     assert db_session.query(FormSubmission).filter(FormSubmission.app_id == app_id).count() == 0
     assert db_session.query(PushSubscription).filter(PushSubscription.app_id == app_id).count() == 0
     assert db_session.query(AppUser).filter(AppUser.app_id == app_id).count() == 0
+    assert db_session.query(WishlistItem).filter(WishlistItem.app_id == app_id).count() == 0
+    assert db_session.query(LoyaltyAccount).filter(LoyaltyAccount.app_id == app_id).count() == 0

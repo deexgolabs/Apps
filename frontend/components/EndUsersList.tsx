@@ -11,8 +11,14 @@ interface EndUser {
   created_at: string
 }
 
+interface LoyaltyCustomer {
+  end_user_id: number
+  points: number
+}
+
 export default function EndUsersList({ appId }: { appId: string }) {
   const [endUsers, setEndUsers] = useState<EndUser[]>([])
+  const [pointsByUser, setPointsByUser] = useState<Record<number, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -27,6 +33,17 @@ export default function EndUsersList({ appId }: { appId: string }) {
       }
     }
     fetchEndUsers()
+
+    api
+      .get<LoyaltyCustomer[]>(`/api/apps/${appId}/loyalty`)
+      .then((response) => {
+        const map: Record<number, number> = {}
+        response.data.forEach((row) => {
+          map[row.end_user_id] = row.points
+        })
+        setPointsByUser(map)
+      })
+      .catch(() => {})
   }, [appId])
 
   if (loading) return <p className="text-sm text-gray-500">Carregando...</p>
@@ -44,7 +61,12 @@ export default function EndUsersList({ appId }: { appId: string }) {
       <p className="text-sm font-medium text-gray-700">Clientes cadastrados ({endUsers.length})</p>
       {endUsers.map((user) => (
         <div key={user.id} className="border border-gray-200 rounded-lg p-3 text-sm">
-          <p className="font-medium text-gray-900">{user.full_name}</p>
+          <div className="flex items-center justify-between">
+            <p className="font-medium text-gray-900">{user.full_name}</p>
+            {pointsByUser[user.id] != null && (
+              <span className="text-xs font-semibold text-indigo-600">{pointsByUser[user.id]} pts</span>
+            )}
+          </div>
           <p className="text-gray-600">{user.email}</p>
           <p className="text-xs text-gray-400 mt-1">
             Cadastrado em {new Date(user.created_at).toLocaleString('pt-BR')}

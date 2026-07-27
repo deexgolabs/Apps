@@ -41,6 +41,9 @@ import VariationPicker from '@/components/VariationPicker'
 import ItemReviews from '@/components/ItemReviews'
 import { parseFreteRules } from '@/lib/frete'
 import OperatingHoursBadge from '@/components/OperatingHoursBadge'
+import LoyaltyBalance from '@/components/LoyaltyBalance'
+import WishlistButton from '@/components/WishlistButton'
+import WishlistPanel from '@/components/WishlistPanel'
 import InstallPwaButton from '@/components/InstallPwaButton'
 import IconGridHomeScreen from '@/components/IconGridHomeScreen'
 import BottomTabBar from '@/components/BottomTabBar'
@@ -242,31 +245,6 @@ function ModuleContent({ moduleName, settings }: { moduleName: string; settings:
           Anúncio · {settings.ad_unit_id}
         </div>
       )
-    case 'cartao_fidelidade': {
-      const total = parseInt(settings.total_selos, 10) || 0
-      const preenchidos = Math.min(3, total)
-      return (
-        <div className="text-center space-y-3">
-          <h3 className="font-semibold text-gray-900">{settings.titulo}</h3>
-          {settings.regra && <p className="text-sm text-gray-600">{settings.regra}</p>}
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {Array.from({ length: total }).map((_, idx) => (
-              <div
-                key={idx}
-                className={`w-6 h-6 rounded-full border-2 ${
-                  idx < preenchidos ? 'bg-indigo-600 border-indigo-600' : 'border-gray-300'
-                }`}
-              />
-            ))}
-          </div>
-          {settings.premio && (
-            <p className="text-sm text-gray-700">
-              Prêmio: <span className="font-semibold">{settings.premio}</span>
-            </p>
-          )}
-        </div>
-      )
-    }
     default:
       return null
   }
@@ -295,6 +273,9 @@ function ListModuleContent({
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [selectedVariations, setSelectedVariations] = useState<Record<number, number[]>>({})
+  const [wishlistIds, setWishlistIds] = useState<Set<number>>(new Set())
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const [hasEndUserSession, setHasEndUserSession] = useState(false)
   const supportsCategories = LIST_MODULES[moduleName]
   const searchEnabled = cartEnabled && mode === 'public'
 
@@ -326,6 +307,40 @@ function ListModuleContent({
     return () => clearTimeout(timeout)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, appId, moduleName, supportsCategories, search, categoryFilter])
+
+  useEffect(() => {
+    if (mode !== 'public' || !cartEnabled) return
+    const hasSession = !!localStorage.getItem(endUserSessionKey(appId))
+    setHasEndUserSession(hasSession)
+    if (!hasSession) return
+    publicApi
+      .get(`/api/apps/${appId}/wishlist/me`, { headers: endUserAuthHeader(appId) })
+      .then((res) => setWishlistIds(new Set(res.data.map((w: { item_id: number }) => w.item_id))))
+      .catch(() => {})
+  }, [mode, appId, cartEnabled])
+
+  const toggleWishlist = async (item: ModuleItem) => {
+    if (!hasEndUserSession) {
+      toast.error('Faça login para favoritar')
+      return
+    }
+    const headers = endUserAuthHeader(appId)
+    try {
+      if (wishlistIds.has(item.id)) {
+        await publicApi.delete(`/api/apps/${appId}/wishlist/${item.id}`, { headers })
+        setWishlistIds((prev) => {
+          const next = new Set(prev)
+          next.delete(item.id)
+          return next
+        })
+      } else {
+        await publicApi.post(`/api/apps/${appId}/modules/${moduleName}/items/${item.id}/wishlist`, {}, { headers })
+        setWishlistIds((prev) => new Set(prev).add(item.id))
+      }
+    } catch (error) {
+      showApiError(error, 'Não foi possível atualizar seus favoritos')
+    }
+  }
 
   const isAgenda = moduleName === 'agenda_interna'
   const isGrid = layout === 'grid'
@@ -484,6 +499,9 @@ function ListModuleContent({
             </p>
           )}
         </div>
+        {mode === 'public' && cartEnabled && (
+          <WishlistButton favorited={wishlistIds.has(item.id)} onToggle={() => toggleWishlist(item)} />
+        )}
         {addToCartButton(item)}
       </div>
       {expandedPanel(item)}
@@ -500,6 +518,11 @@ function ListModuleContent({
       {item.extra?.featured && (
         <span className="absolute top-1 left-1 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded">
           ★ Destaque
+        </span>
+      )}
+      {mode === 'public' && cartEnabled && (
+        <span className="absolute top-1 right-1 bg-white/90 rounded-full w-6 h-6 flex items-center justify-center shadow-sm">
+          <WishlistButton favorited={wishlistIds.has(item.id)} onToggle={() => toggleWishlist(item)} />
         </span>
       )}
       <div
@@ -564,9 +587,14 @@ function ListModuleContent({
             ))}
           </select>
         )}
+        {hasEndUserSession && (
+          <WishlistPanel active={favoritesOnly} onToggle={() => setFavoritesOnly((v) => !v)} />
+        )}
       </div>
     </div>
   )
+
+  const displayItems = favoritesOnly ? items.filter((i) => wishlistIds.has(i.id)) : items
 
   if (loading) {
     return (
@@ -581,12 +609,16 @@ function ListModuleContent({
     )
   }
 
-  if (items.length === 0) {
+  if (displayItems.length === 0) {
     return (
       <div>
         {searchBar}
         <p className="text-sm text-gray-400 italic text-center mt-8">
-          {search || categoryFilter ? 'Nenhum item encontrado.' : 'Este módulo ainda não foi configurado.'}
+          {favoritesOnly
+            ? 'Nenhum item favoritado ainda.'
+            : search || categoryFilter
+              ? 'Nenhum item encontrado.'
+              : 'Este módulo ainda não foi configurado.'}
         </p>
       </div>
     )
@@ -596,17 +628,17 @@ function ListModuleContent({
     return (
       <div>
         {searchBar}
-        {itemsGrid(items)}
+        {itemsGrid(displayItems)}
       </div>
     )
   }
 
-  const uncategorized = items.filter((i) => !i.category_id)
+  const uncategorized = displayItems.filter((i) => !i.category_id)
   return (
     <div className="space-y-4">
       {searchBar}
       {categories.map((category) => {
-        const categoryItems = items.filter((i) => i.category_id === category.id)
+        const categoryItems = displayItems.filter((i) => i.category_id === category.id)
         if (categoryItems.length === 0) return null
         return (
           <div key={category.id}>
@@ -1656,6 +1688,8 @@ export default function AppRuntime({
               <FreteCalculator settings={configs[selectedModule]} />
             ) : selectedModule === 'login_cadastro' ? (
               <EndUserAuthWidget appId={appId} />
+            ) : selectedModule === 'cartao_fidelidade' ? (
+              <LoyaltyBalance appId={appId} settings={configs[selectedModule]} />
             ) : selectedModule === 'push_notifications' ? (
               <PushSubscribeWidget mode={mode} appId={appId} />
             ) : PAYMENT_GATEWAY_MODULES.includes(selectedModule) || selectedModule === 'pagamento_entrega' ? (

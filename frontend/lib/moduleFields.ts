@@ -59,6 +59,12 @@ export const MODULE_FIELDS: Record<string, ModuleField[]> = {
     { key: 'regra', label: 'Regra', type: 'textarea', placeholder: 'A cada compra, ganhe 1 selo' },
     { key: 'total_selos', label: 'Total de selos para o prêmio', type: 'text', placeholder: '10' },
     { key: 'premio', label: 'Prêmio', type: 'text', placeholder: 'Uma sobremesa grátis' },
+    {
+      key: 'pontos_por_real',
+      label: 'Pontos por real gasto (deixe em branco para desativar pontos automáticos)',
+      type: 'text',
+      placeholder: '1',
+    },
   ],
   mercado_pago: [
     { key: 'titulo', label: 'Título da cobrança', type: 'text', placeholder: 'Sinal de reserva' },

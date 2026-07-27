@@ -266,3 +266,31 @@ class ItemReview(Base):
     rating = Column(Integer, nullable=False)
     comment = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class LoyaltyAccount(Base):
+    """Saldo de pontos de fidelidade de um cliente numa loja. Creditado
+    quando um pedido passa a status completed (ver _record_status_event
+    em routes/orders.py), usando pontos_por_real configurado no módulo
+    cartao_fidelidade."""
+    __tablename__ = "loyalty_accounts"
+    __table_args__ = (UniqueConstraint("app_id", "end_user_id", name="uq_loyalty_accounts_app_id_end_user_id"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=False)
+    points = Column(Integer, nullable=False, default=0)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class WishlistItem(Base):
+    __tablename__ = "wishlist_items"
+    __table_args__ = (
+        UniqueConstraint("app_id", "end_user_id", "item_id", name="uq_wishlist_items_app_end_user_item"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=False)
+    item_id = Column(Integer, ForeignKey("module_items.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)

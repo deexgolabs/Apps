@@ -544,6 +544,29 @@ class ItemResponse(BaseModel):
         from_attributes = True
 
 
+class LoyaltyAccountResponse(BaseModel):
+    points: int
+
+    class Config:
+        from_attributes = True
+
+
+class LoyaltyCustomerResponse(BaseModel):
+    end_user_id: int
+    end_user_name: str
+    end_user_email: str
+    points: int
+
+
+class WishlistItemResponse(BaseModel):
+    id: int
+    item_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ===== AUTH RESPONSE =====
 
 
