@@ -1,8 +1,12 @@
+import csv
+import io
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.constants import ORDER_STATUS_LABELS
@@ -21,7 +25,15 @@ from app.payment_gateways import (
 from app.public_utils import get_published_app
 from app.routes.coupons import validate_coupon
 from app.routes.push import send_push_to_end_user
-from app.schemas import CartCheckoutRequest, OrderCreate, OrderResponse, OrderUpdate
+from app.schemas import (
+    CartCheckoutRequest,
+    CloseTableRequest,
+    OrderCreate,
+    OrderResponse,
+    OrderUpdate,
+    SalesReportProduct,
+    SalesReportResponse,
+)
 from app.utils import compute_frete, is_within_operating_hours
 
 GATEWAY_MODULES = {"mercado_pago", "paypal", "pagseguro"}
@@ -299,6 +311,7 @@ async def create_cart_checkout(
         discount_amount=discount_amount,
         coupon_code=coupon.code if coupon else None,
         fulfillment_type=payload.fulfillment_type,
+        table_number=payload.table_number if payload.fulfillment_type == "dine_in" else None,
         payment_method=payload.gateway,
         status="pending",
     )
@@ -404,6 +417,46 @@ def _notify_customer_status_change(app: App, order: Order, db: Session) -> None:
         logger.exception("Falha ao enviar push de status pro end_user %s", order.end_user_id)
 
 
+@router.put("/orders/close-table", response_model=List[OrderResponse])
+async def close_table(
+    app_id: int,
+    payload: CloseTableRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Fecha em lote todos os pedidos em aberto de uma mesa/comanda, marcando
+    como completed — dispara os mesmos hooks de notificação por pedido.
+    Precisa vir registrada antes de PUT /orders/{order_id} nesse arquivo,
+    senão o Starlette casa 'close-table' com o path param order_id (int) e
+    devolve 422 antes de chegar aqui."""
+    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+
+    orders = (
+        db.query(Order)
+        .filter(
+            Order.app_id == app_id,
+            Order.table_number == payload.table_number,
+            Order.status.notin_(["completed", "cancelled"]),
+        )
+        .all()
+    )
+    if not orders:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nenhum pedido em aberto para essa mesa")
+
+    for order in orders:
+        order.status = "completed"
+        _record_status_event(order, db)
+    db.commit()
+
+    for order in orders:
+        db.refresh(order)
+        _notify_customer_status_change(app, order, db)
+
+    return orders
+
+
 @router.put("/orders/{order_id}", response_model=OrderResponse)
 async def update_order(
     app_id: int,
@@ -482,3 +535,97 @@ async def cancel_my_order(
 
     _notify_owner_order_cancelled(app, order, db)
     return order
+
+
+def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
+    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    return app
+
+
+@router.get("/orders/report", response_model=SalesReportResponse)
+async def get_sales_report(
+    app_id: int,
+    days: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Receita (só pedidos completed), contagem por status e top-10 produtos —
+    opcionalmente filtrado aos últimos `days` dias. Só o dono do app pode ver."""
+    _get_owned_app(app_id, db, current_user)
+
+    query = db.query(Order).filter(Order.app_id == app_id)
+    if days:
+        query = query.filter(Order.created_at >= datetime.now(timezone.utc) - timedelta(days=days))
+    orders = query.all()
+
+    revenue = sum(o.amount or 0 for o in orders if o.status == "completed")
+    orders_by_status: dict = {}
+    for o in orders:
+        orders_by_status[o.status] = orders_by_status.get(o.status, 0) + 1
+
+    order_ids = [o.id for o in orders]
+    top_products: List[SalesReportProduct] = []
+    if order_ids:
+        rows = (
+            db.query(
+                OrderItem.name,
+                func.sum(OrderItem.quantity).label("quantity"),
+                func.sum(OrderItem.subtotal).label("revenue"),
+            )
+            .filter(OrderItem.order_id.in_(order_ids))
+            .group_by(OrderItem.name)
+            .order_by(func.sum(OrderItem.quantity).desc())
+            .limit(10)
+            .all()
+        )
+        top_products = [SalesReportProduct(name=r.name, quantity=r.quantity, revenue=r.revenue) for r in rows]
+
+    return SalesReportResponse(revenue=revenue, orders_by_status=orders_by_status, top_products=top_products)
+
+
+@router.get("/orders/export.csv")
+async def export_orders_csv(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exporta todos os pedidos do app em CSV — um pedido por linha, com um
+    resumo dos itens. Só o dono do app pode exportar."""
+    _get_owned_app(app_id, db, current_user)
+
+    orders = db.query(Order).filter(Order.app_id == app_id).order_by(Order.created_at.desc()).all()
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "id", "modulo", "status", "criado_em", "itens", "subtotal", "frete",
+        "desconto", "total", "forma_entrega", "mesa", "cupom", "dados_cliente",
+    ])
+    for o in orders:
+        items_summary = "; ".join(f"{oi.quantity}x {oi.name}" for oi in o.items)
+        writer.writerow([
+            o.id,
+            o.module_name,
+            ORDER_STATUS_LABELS.get(o.status, o.status),
+            o.created_at.isoformat(),
+            items_summary,
+            o.subtotal if o.subtotal is not None else "",
+            o.delivery_fee if o.delivery_fee is not None else "",
+            o.discount_amount if o.discount_amount is not None else "",
+            o.amount if o.amount is not None else "",
+            o.fulfillment_type or "",
+            o.table_number or "",
+            o.coupon_code or "",
+            "; ".join(f"{k}: {v}" for k, v in (o.data or {}).items()),
+        ])
+    buffer.seek(0)
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=pedidos_app_{app_id}.csv"},
+    )
+
+

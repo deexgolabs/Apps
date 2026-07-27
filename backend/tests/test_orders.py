@@ -477,3 +477,82 @@ def test_cart_checkout_rejects_combo_with_insufficient_stock(client, register_us
 
     grande = db_session.query(ItemVariation).filter(ItemVariation.id == grande_id).first()
     assert grande.stock == 1  # não decrementado — checkout inteiro falhou
+
+
+def test_sales_report_computes_revenue_status_and_top_products(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "salesreport@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    order1 = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 2}], "customer": {}},
+    )
+    order2 = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}], "customer": {}},
+    )
+    assert order1.status_code == 201 and order2.status_code == 201
+
+    client.put(f"/api/apps/{app_id}/orders/{order1.json()['id']}", json={"status": "completed"}, headers=owner_headers)
+
+    report = client.get(f"/api/apps/{app_id}/orders/report", headers=owner_headers)
+    assert report.status_code == 200
+    body = report.json()
+    assert body["revenue"] == 60.0  # só o pedido completed (2x30)
+    assert body["orders_by_status"] == {"completed": 1, "pending": 1}
+    assert body["top_products"][0]["name"] == "Pizza"
+    assert body["top_products"][0]["quantity"] == 3  # soma dos dois pedidos
+
+
+def test_sales_report_requires_owner(client, register_user):
+    app_id, _ = _published_app(client, register_user, "salesreportauth@example.com")
+    other = register_user(email="salesreportother@example.com")
+    other_headers = {"Authorization": f"Bearer {other['access_token']}"}
+
+    response = client.get(f"/api/apps/{app_id}/orders/report", headers=other_headers)
+    assert response.status_code == 404
+
+
+def test_export_orders_csv_returns_csv_content(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "exportcsv@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+    client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}], "customer": {"nome": "Cliente"}},
+    )
+
+    response = client.get(f"/api/apps/{app_id}/orders/export.csv", headers=owner_headers)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "Pizza" in response.text
+
+
+def test_close_table_marks_open_dine_in_orders_as_completed(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "closetable@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Pizza", price=30.0)
+
+    order = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "quantity": 1}],
+            "customer": {},
+            "fulfillment_type": "dine_in",
+            "table_number": "5",
+        },
+    )
+    assert order.status_code == 201
+    assert order.json()["table_number"] == "5"
+
+    close = client.put(f"/api/apps/{app_id}/orders/close-table", json={"table_number": "5"}, headers=owner_headers)
+    assert close.status_code == 200
+    assert close.json()[0]["status"] == "completed"
+
+    updated_order = db_session.query(Order).filter(Order.id == order.json()["id"]).first()
+    assert updated_order.status == "completed"
+
+
+def test_close_table_returns_404_when_no_open_orders(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "closetableempty@example.com")
+
+    response = client.put(f"/api/apps/{app_id}/orders/close-table", json={"table_number": "99"}, headers=owner_headers)
+    assert response.status_code == 404

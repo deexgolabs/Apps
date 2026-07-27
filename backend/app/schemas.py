@@ -342,6 +342,7 @@ class OrderResponse(BaseModel):
     discount_amount: Optional[float] = None
     coupon_code: Optional[str] = None
     fulfillment_type: Optional[str] = None
+    table_number: Optional[str] = None
     payment_method: Optional[str] = None
     payment_reference: Optional[str] = None
     status: str
@@ -369,6 +370,23 @@ class CartCheckoutRequest(BaseModel):
     fulfillment_type: str = "delivery"
     cep: Optional[str] = None
     gateway: Optional[str] = None
+    table_number: Optional[str] = None
+
+
+class SalesReportProduct(BaseModel):
+    name: str
+    quantity: int
+    revenue: float
+
+
+class SalesReportResponse(BaseModel):
+    revenue: float
+    orders_by_status: dict
+    top_products: List[SalesReportProduct]
+
+
+class CloseTableRequest(BaseModel):
+    table_number: str
 
 
 class CouponCreate(BaseModel):

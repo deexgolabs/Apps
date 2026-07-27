@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Order } from '@/types'
+import WhatsAppShareButton from '@/components/WhatsAppShareButton'
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendente' },
@@ -90,7 +91,13 @@ export default function OrdersList({ appId, moduleName }: { appId: string; modul
           )}
           {(order.fulfillment_type || order.coupon_code) && (
             <p className="text-xs text-gray-500">
-              {order.fulfillment_type === 'pickup' ? '🏠 Retirada no local' : order.fulfillment_type === 'delivery' ? '🚚 Entrega' : null}
+              {order.fulfillment_type === 'pickup'
+                ? '🏠 Retirada no local'
+                : order.fulfillment_type === 'delivery'
+                  ? '🚚 Entrega'
+                  : order.fulfillment_type === 'dine_in'
+                    ? `🍽️ Mesa ${order.table_number || ''}`
+                    : null}
               {order.coupon_code && <span className="ml-2">🏷️ Cupom: {order.coupon_code}</span>}
             </p>
           )}
@@ -109,6 +116,9 @@ export default function OrdersList({ appId, moduleName }: { appId: string; modul
               <span className="font-medium">{key}:</span> {String(value)}
             </p>
           ))}
+          <div className="pt-1 border-t border-gray-100">
+            <WhatsAppShareButton order={order} />
+          </div>
         </div>
       ))}
     </div>

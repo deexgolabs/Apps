@@ -47,7 +47,8 @@ export default function CheckoutForm({
     }
   })
   const [cep, setCep] = useState('')
-  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup'>('delivery')
+  const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup' | 'dine_in'>('delivery')
+  const [tableNumber, setTableNumber] = useState('')
   const [couponInput, setCouponInput] = useState('')
   const [couponDiscount, setCouponDiscount] = useState<number | null>(null)
   const [couponError, setCouponError] = useState<string | null>(null)
@@ -64,6 +65,9 @@ export default function CheckoutForm({
   // "Pedido confirmado!"/aguardando pagamento nunca chegaria a aparecer.
   if (!cart.cartModuleName && !sent && !gatewayOrderId) return null
 
+  // comanda/mesa só faz sentido pra cardápio de restaurante, não pro catálogo
+  // de loja/retail — os dois módulos são os únicos com carrinho habilitado.
+  const allowDineIn = cart.cartModuleName === 'cardapio'
   const deliveryFee = fulfillment === 'delivery' ? computeFrete(freteRegras || '', cep) : 0
   const total = cart.subtotal + deliveryFee - (couponDiscount || 0)
 
@@ -105,6 +109,7 @@ export default function CheckoutForm({
           coupon_code: couponInput.trim() || undefined,
           fulfillment_type: fulfillment,
           cep: fulfillment === 'delivery' ? cep : undefined,
+          table_number: fulfillment === 'dine_in' ? tableNumber.trim() || undefined : undefined,
           gateway: paymentMethod !== 'entrega' ? paymentMethod : undefined,
         },
         { headers: endUserAuthHeader(appId) }
@@ -215,6 +220,30 @@ export default function CheckoutForm({
           >
             Retirada
           </button>
+          {allowDineIn && (
+            <button
+              type="button"
+              onClick={() => setFulfillment('dine_in')}
+              className={`flex-1 text-xs font-medium py-1.5 rounded border ${
+                fulfillment === 'dine_in' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-600'
+              }`}
+            >
+              Na mesa
+            </button>
+          )}
+        </div>
+      )}
+
+      {fulfillment === 'dine_in' && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Número da mesa</label>
+          <input
+            type="text"
+            value={tableNumber}
+            onChange={(e) => setTableNumber(e.target.value)}
+            placeholder="Ex: 5"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+          />
         </div>
       )}
 

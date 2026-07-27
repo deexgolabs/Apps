@@ -14,6 +14,8 @@ import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
+import SalesReport from '@/components/SalesReport'
+import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
 import PushHistory from '@/components/PushHistory'
 import ImageUploadField from '@/components/ImageUploadField'
@@ -32,13 +34,14 @@ const FONT_OPTIONS = [
   { value: "'Trebuchet MS', sans-serif", label: 'Trebuchet MS' },
 ]
 
-type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'notificacoes' | 'publicar'
+type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'relatorios' | 'notificacoes' | 'publicar'
 
 const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'geral', label: 'Geral' },
   { id: 'marca', label: 'Marca' },
   { id: 'modulos', label: 'Módulos' },
   { id: 'pedidos', label: 'Pedidos' },
+  { id: 'relatorios', label: 'Relatórios' },
   { id: 'publicar', label: 'Publicar' },
 ]
 
@@ -376,9 +379,12 @@ export default function AppEditorPage({ params }: PageProps) {
             {activeTab === 'pedidos' && (
               <div className="space-y-4">
                 <CouponsManager appId={id} />
+                <OpenTablesPanel appId={id} />
                 <OrdersList appId={id} />
               </div>
             )}
+
+            {activeTab === 'relatorios' && <SalesReport appId={id} />}
 
             {activeTab === 'notificacoes' && (
               <div className="space-y-6">

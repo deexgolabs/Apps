@@ -105,6 +105,7 @@ export interface Order {
   discount_amount: number | null
   coupon_code: string | null
   fulfillment_type: string | null
+  table_number: string | null
   payment_method: string | null
   payment_reference: string | null
   status: string

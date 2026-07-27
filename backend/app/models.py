@@ -138,6 +138,7 @@ class Order(Base):
     discount_amount = Column(Float, nullable=True, default=0)
     coupon_code = Column(String, nullable=True)
     fulfillment_type = Column(String, nullable=True, default="delivery")  # delivery | pickup | dine_in
+    table_number = Column(String, nullable=True)  # só usado quando fulfillment_type == dine_in
     payment_method = Column(String, nullable=True)
     payment_reference = Column(String, nullable=True)
     status = Column(String, default="pending")  # pending, confirmed, preparing, completed, cancelled
