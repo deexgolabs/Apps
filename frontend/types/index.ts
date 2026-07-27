@@ -18,8 +18,17 @@ export interface App {
   status: 'draft' | 'published'
   config: Record<string, any>
   modules: string[]
+  custom_domain: string | null
+  custom_domain_verified: boolean
   created_at: string
   updated_at: string
+}
+
+export interface CustomDomainStatus {
+  domain: string | null
+  verified: boolean
+  verification_host: string | null
+  verification_token: string | null
 }
 
 export interface Module {

@@ -201,11 +201,28 @@ class AppResponse(AppBase):
     status: str
     config: dict
     modules: list
+    custom_domain: Optional[str] = None
+    custom_domain_verified: bool = False
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class CustomDomainRequest(BaseModel):
+    domain: str
+
+
+class CustomDomainResponse(BaseModel):
+    domain: Optional[str] = None
+    verified: bool = False
+    verification_host: Optional[str] = None
+    verification_token: Optional[str] = None
+
+
+class ResolveDomainResponse(BaseModel):
+    app_id: int
 
 
 # ===== MODULE SCHEMAS =====

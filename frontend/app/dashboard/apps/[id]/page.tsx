@@ -12,6 +12,7 @@ import type { NavigationStyle, HomeScreenStyle } from '@/components/AppRuntime'
 import AddModulePanel from '@/components/AddModulePanel'
 import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
+import CustomDomainPanel from '@/components/CustomDomainPanel'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
 import SalesReport from '@/components/SalesReport'
@@ -395,7 +396,10 @@ export default function AppEditorPage({ params }: PageProps) {
             )}
 
             {activeTab === 'publicar' && (
-              <PublishPanel app={app} onUpdated={setApp} />
+              <div className="space-y-6">
+                <PublishPanel app={app} onUpdated={setApp} />
+                <CustomDomainPanel appId={id} />
+              </div>
             )}
 
             <div className="flex gap-4 pt-4 border-t border-gray-200">

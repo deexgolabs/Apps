@@ -35,6 +35,9 @@ class App(Base):
     config = Column(JSON, default=dict)  # cores, logo, textos
     modules = Column(JSON, default=list)  # módulos ativados (lista de nomes)
     status = Column(String, default="draft")  # draft, published
+    custom_domain = Column(String, unique=True, nullable=True)
+    custom_domain_verified = Column(Boolean, default=False, nullable=False)
+    custom_domain_verification_token = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

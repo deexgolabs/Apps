@@ -16,3 +16,4 @@ pywebpush>=2.0.0
 alembic>=1.13.0
 slowapi>=0.1.9
 sentry-sdk[fastapi]>=2.0.0
+dnspython>=2.6.0
