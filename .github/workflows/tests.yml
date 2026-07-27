@@ -55,7 +55,14 @@ jobs:
         run: alembic upgrade head
 
       - name: Run pytest
-        run: pytest tests/ -q
+        # `python -m pytest` (não só `pytest`) é o que insere o diretório atual
+        # (backend/) no sys.path — sem isso o import "from app.config import
+        # settings" em conftest.py falha com ModuleNotFoundError, já que não
+        # há pyproject.toml/pytest.ini nem __init__.py cascateando o pacote
+        # app pra cima. Rodar localmente sempre foi assim (python -m pytest),
+        # só o workflow usava o binário direto — por isso passava sempre no
+        # dev e falhava sempre aqui.
+        run: python -m pytest tests/ -q
 
   vitest:
     runs-on: ubuntu-latest
