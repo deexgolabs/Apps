@@ -71,10 +71,66 @@ export default function AppEditorPage({ params }: PageProps) {
   const [fontFamily, setFontFamily] = useState('')
   const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>('hamburger')
   const [homeScreenStyle, setHomeScreenStyle] = useState<HomeScreenStyle>('content')
-  const [activeModules, setActiveModules] = useState<string[]>([])
+  const [activeModules, setActiveModulesRaw] = useState<string[]>([])
+  const [moduleHistory, setModuleHistory] = useState<string[][]>([])
+  const [moduleFuture, setModuleFuture] = useState<string[][]>([])
   const [configuringModule, setConfiguringModule] = useState<string | null>(null)
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, any>>({})
   const [configVersion, setConfigVersion] = useState(0)
+
+  // Desfazer/refazer cobre só a lista de módulos (adicionar/remover/reordenar)
+  // — é onde o erro mais comum e mais fácil de reverter acontece; configuração
+  // de cor/fonte/logo (aba Marca) não entra no histórico por enquanto.
+  //
+  // Cada setter aqui é chamado uma única vez, com valor já calculado a partir
+  // do estado atual (lido direto da closure, não de dentro de outro updater)
+  // -- setState updaters precisam ser puros, e encadear um setState com efeito
+  // colateral dentro do updater de outro quebra sob o double-invoke do React
+  // Strict Mode (usado no modo dev do Next.js): o histórico duplicava e
+  // desfazer/refazer ficava inconsistente depois da primeira ação.
+  const setActiveModules = (updater: string[] | ((prev: string[]) => string[])) => {
+    const next = typeof updater === 'function' ? updater(activeModules) : updater
+    if (JSON.stringify(next) === JSON.stringify(activeModules)) return
+    setModuleHistory((h) => [...h, activeModules])
+    setModuleFuture([])
+    setActiveModulesRaw(next)
+  }
+
+  const undoModules = () => {
+    if (moduleHistory.length === 0) return
+    const previous = moduleHistory[moduleHistory.length - 1]
+    setModuleFuture((f) => [activeModules, ...f])
+    setModuleHistory((h) => h.slice(0, -1))
+    setActiveModulesRaw(previous)
+  }
+
+  const redoModules = () => {
+    if (moduleFuture.length === 0) return
+    const next = moduleFuture[0]
+    setModuleHistory((h) => [...h, activeModules])
+    setModuleFuture((f) => f.slice(1))
+    setActiveModulesRaw(next)
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const isTyping = target && ['INPUT', 'TEXTAREA'].includes(target.tagName)
+      if (isTyping) return
+      const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z'
+      const isRedo = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z'
+      if (isUndo) {
+        e.preventDefault()
+        undoModules()
+      } else if (isRedo) {
+        e.preventDefault()
+        redoModules()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const fetchModuleConfigs = async () => {
     try {
@@ -107,7 +163,7 @@ export default function AppEditorPage({ params }: PageProps) {
         setFontFamily(appData.config?.font_family || '')
         setNavigationStyle(appData.config?.navigation_style || 'hamburger')
         setHomeScreenStyle(appData.config?.home_screen_style || 'content')
-        setActiveModules(appData.modules || [])
+        setActiveModulesRaw(appData.modules || [])
         setModules(modulesRes.data)
       } catch (error) {
         toast.error('Erro ao carregar aplicativo')
@@ -368,13 +424,35 @@ export default function AppEditorPage({ params }: PageProps) {
             )}
 
             {activeTab === 'modulos' && (
-              <AddModulePanel
-                modules={modules}
-                activeModules={activeModules}
-                userPlan={userPlan}
-                primaryColor={primaryColor}
-                onAdd={(name) => setActiveModules([...activeModules, name])}
-              />
+              <div className="space-y-3">
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={undoModules}
+                    disabled={moduleHistory.length === 0}
+                    title="Desfazer (Ctrl+Z)"
+                    className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    ↩ Desfazer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={redoModules}
+                    disabled={moduleFuture.length === 0}
+                    title="Refazer (Ctrl+Shift+Z)"
+                    className="text-xs px-2 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    ↪ Refazer
+                  </button>
+                </div>
+                <AddModulePanel
+                  modules={modules}
+                  activeModules={activeModules}
+                  userPlan={userPlan}
+                  primaryColor={primaryColor}
+                  onAdd={(name) => setActiveModules([...activeModules, name])}
+                />
+              </div>
             )}
 
             {activeTab === 'pedidos' && (
