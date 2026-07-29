@@ -144,6 +144,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         App,
         AppConfig,
         AppUser,
+        AppVersion,
         Coupon,
         FormSubmission,
         ItemReview,
@@ -179,4 +180,5 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
     db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).delete(synchronize_session=False)
     db.query(AppUser).filter(AppUser.app_id == app_id).delete(synchronize_session=False)
     db.query(AppConfig).filter(AppConfig.app_id == app_id).delete(synchronize_session=False)
+    db.query(AppVersion).filter(AppVersion.app_id == app_id).delete(synchronize_session=False)
     db.query(App).filter(App.id == app_id).delete(synchronize_session=False)

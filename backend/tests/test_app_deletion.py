@@ -1,6 +1,7 @@
 from app.models import (
     App,
     AppUser,
+    AppVersion,
     Coupon,
     FormSubmission,
     ItemReview,
@@ -125,6 +126,10 @@ def test_delete_app_removes_all_child_rows(client, register_user, db_session):
     )
     assert subscription.status_code == 201, subscription.text
 
+    rename = client.put(f"/api/apps/{app_id}", json={"name": "App Exclusao Renomeado"}, headers=headers)
+    assert rename.status_code == 200, rename.text
+    assert db_session.query(AppVersion).filter(AppVersion.app_id == app_id).count() == 1
+
     deleted = client.delete(f"/api/apps/{app_id}", headers=headers)
     assert deleted.status_code == 204, deleted.text
 
@@ -141,3 +146,4 @@ def test_delete_app_removes_all_child_rows(client, register_user, db_session):
     assert db_session.query(AppUser).filter(AppUser.app_id == app_id).count() == 0
     assert db_session.query(WishlistItem).filter(WishlistItem.app_id == app_id).count() == 0
     assert db_session.query(LoyaltyAccount).filter(LoyaltyAccount.app_id == app_id).count() == 0
+    assert db_session.query(AppVersion).filter(AppVersion.app_id == app_id).count() == 0

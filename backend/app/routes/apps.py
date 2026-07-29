@@ -4,14 +4,40 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
-from app.models import App, AppConfig, ModuleCategory, ModuleItem, PushSendLog, User
-from app.schemas import AppCreate, AppResponse, AppUpdate
+from app.models import App, AppConfig, AppVersion, ModuleCategory, ModuleItem, PushSendLog, User
+from app.schemas import AppCreate, AppResponse, AppUpdate, AppVersionResponse
 from app.dependencies import get_current_user
 from app.constants import APP_TEMPLATES
 from app.plan_limits import get_plan_limits
 from app.utils import delete_app_cascade
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
+
+MAX_APP_VERSIONS = 20
+
+
+def _snapshot_app_version(app: App, db: Session) -> None:
+    """Guarda o estado atual do app (antes da alteração que está sendo salva)
+    como uma versão no histórico. Mantém só as últimas MAX_APP_VERSIONS pra
+    não crescer sem limite."""
+    db.add(AppVersion(
+        app_id=app.id,
+        name=app.name,
+        description=app.description,
+        config=app.config,
+        modules=app.modules,
+    ))
+    db.flush()
+
+    old_versions = (
+        db.query(AppVersion)
+        .filter(AppVersion.app_id == app.id)
+        .order_by(AppVersion.created_at.desc())
+        .offset(MAX_APP_VERSIONS)
+        .all()
+    )
+    for old in old_versions:
+        db.delete(old)
 
 
 @router.get("/", response_model=List[AppResponse])
@@ -174,6 +200,16 @@ async def update_app(
             detail="App not found"
         )
 
+    # Histórico de versões só faz sentido pra mudança de conteúdo (nome,
+    # descrição, config, módulos) -- publicar/despublicar sozinho (só status)
+    # não vira uma versão nova, senão a lista de versões enche de "mudanças"
+    # que na prática não têm nada de reversível.
+    touches_content = any(
+        getattr(app_data, field) is not None for field in ("name", "description", "config", "modules")
+    )
+    if touches_content:
+        _snapshot_app_version(app, db)
+
     if app_data.name is not None:
         app.name = app_data.name
     if app_data.description is not None:
@@ -190,6 +226,61 @@ async def update_app(
         app.modules = app_data.modules
     if app_data.status is not None:
         app.status = app_data.status
+
+    db.commit()
+    db.refresh(app)
+    return app
+
+
+@router.get("/{app_id}/versions", response_model=List[AppVersionResponse])
+async def list_app_versions(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+
+    return (
+        db.query(AppVersion)
+        .filter(AppVersion.app_id == app_id)
+        .order_by(AppVersion.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/{app_id}/versions/{version_id}/restore", response_model=AppResponse)
+async def restore_app_version(
+    app_id: int,
+    version_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Restaura o app pro estado de uma versão salva. A restauração em si
+    também vira uma versão nova no histórico -- assim dá pra "desfazer o
+    desfazer" restaurando de novo pra versão mais recente se precisar."""
+    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+
+    version = db.query(AppVersion).filter(AppVersion.id == version_id, AppVersion.app_id == app_id).first()
+    if not version:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Versão não encontrada")
+
+    module_limit = get_plan_limits(current_user.plan, db)["modules"]
+    if len(version.modules or []) > module_limit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Essa versão tem mais módulos do que o limite do plano '{current_user.plan}' permite hoje.",
+        )
+
+    _snapshot_app_version(app, db)
+
+    app.name = version.name
+    app.description = version.description
+    app.config = version.config
+    app.modules = version.modules
 
     db.commit()
     db.refresh(app)

@@ -195,6 +195,18 @@ class AppUpdate(BaseModel):
     status: Optional[str] = None
 
 
+class AppVersionResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    config: dict
+    modules: list
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AppResponse(AppBase):
     id: int
     user_id: int

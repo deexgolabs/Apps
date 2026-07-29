@@ -13,6 +13,7 @@ import AddModulePanel from '@/components/AddModulePanel'
 import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
 import CustomDomainPanel from '@/components/CustomDomainPanel'
+import VersionHistoryPanel from '@/components/VersionHistoryPanel'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
 import SalesReport from '@/components/SalesReport'
@@ -77,6 +78,7 @@ export default function AppEditorPage({ params }: PageProps) {
   const [configuringModule, setConfiguringModule] = useState<string | null>(null)
   const [moduleConfigs, setModuleConfigs] = useState<Record<string, any>>({})
   const [configVersion, setConfigVersion] = useState(0)
+  const [versionsRefreshKey, setVersionsRefreshKey] = useState(0)
 
   // Desfazer/refazer cobre só a lista de módulos (adicionar/remover/reordenar)
   // — é onde o erro mais comum e mais fácil de reverter acontece; configuração
@@ -141,6 +143,25 @@ export default function AppEditorPage({ params }: PageProps) {
     }
   }
 
+  const applyAppData = (appData: App) => {
+    setApp(appData)
+    setName(appData.name)
+    setDescription(appData.description || '')
+    setPrimaryColor(appData.config?.primary_color || '#4F46E5')
+    setSecondaryColor(appData.config?.secondary_color || '#10B981')
+    setLogoUrl(appData.config?.logo_url || '')
+    setIconUrl(appData.config?.icon_url || '')
+    setSplashUrl(appData.config?.splash_url || '')
+    setHomeModule(appData.config?.home_module || '')
+    setHomeImageUrl(appData.config?.home_image_url || '')
+    setFontFamily(appData.config?.font_family || '')
+    setNavigationStyle(appData.config?.navigation_style || 'hamburger')
+    setHomeScreenStyle(appData.config?.home_screen_style || 'content')
+    setActiveModulesRaw(appData.modules || [])
+    setModuleHistory([])
+    setModuleFuture([])
+  }
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -149,21 +170,7 @@ export default function AppEditorPage({ params }: PageProps) {
           api.get('/api/modules'),
         ])
 
-        const appData: App = appRes.data
-        setApp(appData)
-        setName(appData.name)
-        setDescription(appData.description || '')
-        setPrimaryColor(appData.config?.primary_color || '#4F46E5')
-        setSecondaryColor(appData.config?.secondary_color || '#10B981')
-        setLogoUrl(appData.config?.logo_url || '')
-        setIconUrl(appData.config?.icon_url || '')
-        setSplashUrl(appData.config?.splash_url || '')
-        setHomeModule(appData.config?.home_module || '')
-        setHomeImageUrl(appData.config?.home_image_url || '')
-        setFontFamily(appData.config?.font_family || '')
-        setNavigationStyle(appData.config?.navigation_style || 'hamburger')
-        setHomeScreenStyle(appData.config?.home_screen_style || 'content')
-        setActiveModulesRaw(appData.modules || [])
+        applyAppData(appRes.data)
         setModules(modulesRes.data)
       } catch (error) {
         toast.error('Erro ao carregar aplicativo')
@@ -177,6 +184,13 @@ export default function AppEditorPage({ params }: PageProps) {
     fetchModuleConfigs()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, router])
+
+  const handleRestored = (appData: App) => {
+    applyAppData(appData)
+    updateAppInStore(appData)
+    fetchModuleConfigs()
+    setConfigVersion((v) => v + 1)
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,6 +217,7 @@ export default function AppEditorPage({ params }: PageProps) {
 
       setApp(response.data)
       updateAppInStore(response.data)
+      setVersionsRefreshKey((v) => v + 1)
       toast.success('Aplicativo salvo com sucesso!')
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Erro ao salvar aplicativo')
@@ -315,6 +330,8 @@ export default function AppEditorPage({ params }: PageProps) {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 h-24"
                   />
                 </div>
+
+                <VersionHistoryPanel key={versionsRefreshKey} appId={id} onRestored={handleRestored} />
               </div>
             )}
 

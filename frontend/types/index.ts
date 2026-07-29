@@ -31,6 +31,15 @@ export interface CustomDomainStatus {
   verification_token: string | null
 }
 
+export interface AppVersion {
+  id: number
+  name: string
+  description: string | null
+  config: Record<string, any>
+  modules: string[]
+  created_at: string
+}
+
 export interface Module {
   id: number
   name: string

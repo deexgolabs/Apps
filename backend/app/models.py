@@ -64,6 +64,22 @@ class AppConfig(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class AppVersion(Base):
+    """Snapshot do estado do app (nome, descrição, config, módulos) tirado
+    logo antes de cada alteração relevante em PUT /api/apps/{id} -- permite
+    reverter pra um ponto anterior. Só guarda as últimas N versões por app
+    (ver MAX_APP_VERSIONS em routes/apps.py), então não cresce sem limite."""
+    __tablename__ = "app_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    config = Column(JSON, default=dict)
+    modules = Column(JSON, default=list)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class FormSubmission(Base):
     __tablename__ = "form_submissions"
 
