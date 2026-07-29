@@ -17,6 +17,7 @@ interface AppPreviewProps {
   homeModule: string
   homeImageUrl?: string
   fontFamily?: string
+  customCss?: string
   navigationStyle?: NavigationStyle
   homeScreenStyle?: HomeScreenStyle
   editable?: boolean

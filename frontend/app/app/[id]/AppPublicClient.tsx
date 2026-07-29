@@ -76,6 +76,7 @@ export default function AppPublicClient({ appId }: { appId: string }) {
         homeModule={config.home_module || ''}
         homeImageUrl={config.home_image_url || ''}
         fontFamily={config.font_family || ''}
+        customCss={config.custom_css || ''}
         navigationStyle={config.navigation_style || 'hamburger'}
         homeScreenStyle={config.home_screen_style || 'content'}
       />

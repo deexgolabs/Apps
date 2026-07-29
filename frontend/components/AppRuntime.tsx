@@ -65,12 +65,20 @@ interface AppRuntimeProps {
   homeModule: string
   homeImageUrl?: string
   fontFamily?: string
+  customCss?: string
   navigationStyle?: NavigationStyle
   homeScreenStyle?: HomeScreenStyle
   editable?: boolean
   onModulesChange?: (names: string[]) => void
   onConfigureModule?: (name: string) => void
   configVersion?: number
+}
+
+// CSS não executa script, mas um <style> ainda é HTML inserido via
+// dangerouslySetInnerHTML -- corta qualquer tentativa de fechar a tag e injetar
+// outra coisa (</style>, <script) antes de renderizar o CSS customizado do dono.
+export function sanitizeCustomCss(css: string): string {
+  return css.replace(/<\/style/gi, '').replace(/<script/gi, '')
 }
 
 function SortableModuleRow({
@@ -1547,6 +1555,7 @@ export default function AppRuntime({
   homeModule,
   homeImageUrl,
   fontFamily,
+  customCss,
   navigationStyle = 'hamburger',
   homeScreenStyle = 'content',
   editable = false,
@@ -1618,6 +1627,7 @@ export default function AppRuntime({
 
   const content = (
     <div className="contents" style={{ fontFamily: fontFamily || undefined }}>
+      {customCss && <style dangerouslySetInnerHTML={{ __html: sanitizeCustomCss(customCss) }} />}
       <div className="h-10 flex items-center justify-between px-3" style={{ backgroundColor: primaryColor }}>
         {navigationStyle === 'bottom_tabs' ? (
           <span className="w-4" />

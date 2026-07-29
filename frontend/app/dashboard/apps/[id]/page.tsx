@@ -70,6 +70,7 @@ export default function AppEditorPage({ params }: PageProps) {
   const [homeModule, setHomeModule] = useState('')
   const [homeImageUrl, setHomeImageUrl] = useState('')
   const [fontFamily, setFontFamily] = useState('')
+  const [customCss, setCustomCss] = useState('')
   const [navigationStyle, setNavigationStyle] = useState<NavigationStyle>('hamburger')
   const [homeScreenStyle, setHomeScreenStyle] = useState<HomeScreenStyle>('content')
   const [activeModules, setActiveModulesRaw] = useState<string[]>([])
@@ -155,6 +156,7 @@ export default function AppEditorPage({ params }: PageProps) {
     setHomeModule(appData.config?.home_module || '')
     setHomeImageUrl(appData.config?.home_image_url || '')
     setFontFamily(appData.config?.font_family || '')
+    setCustomCss(appData.config?.custom_css || '')
     setNavigationStyle(appData.config?.navigation_style || 'hamburger')
     setHomeScreenStyle(appData.config?.home_screen_style || 'content')
     setActiveModulesRaw(appData.modules || [])
@@ -209,6 +211,7 @@ export default function AppEditorPage({ params }: PageProps) {
           home_module: homeModule,
           home_image_url: homeImageUrl,
           font_family: fontFamily,
+          custom_css: customCss,
           navigation_style: navigationStyle,
           home_screen_style: homeScreenStyle,
         },
@@ -437,6 +440,20 @@ export default function AppEditorPage({ params }: PageProps) {
                     Grade de ícones mostra todos os módulos como atalhos, tipo tela inicial de celular.
                   </p>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CSS customizado (avançado)</label>
+                  <textarea
+                    value={customCss}
+                    onChange={(e) => setCustomCss(e.target.value)}
+                    spellCheck={false}
+                    placeholder={'.app-header { border-radius: 0 0 16px 16px; }'}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 h-32 font-mono text-xs"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Regras CSS aplicadas por cima do estilo padrão do app, tanto aqui na prévia quanto no app publicado. Use com cuidado — erros de sintaxe não travam o app, só não têm efeito.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -528,6 +545,7 @@ export default function AppEditorPage({ params }: PageProps) {
             homeModule={homeModule}
             homeImageUrl={homeImageUrl}
             fontFamily={fontFamily}
+            customCss={customCss}
             navigationStyle={navigationStyle}
             homeScreenStyle={homeScreenStyle}
             editable
