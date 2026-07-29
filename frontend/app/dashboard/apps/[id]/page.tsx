@@ -14,6 +14,7 @@ import UsagePanel from '@/components/UsagePanel'
 import PublishPanel from '@/components/PublishPanel'
 import CustomDomainPanel from '@/components/CustomDomainPanel'
 import VersionHistoryPanel from '@/components/VersionHistoryPanel'
+import GuidedTour from '@/components/GuidedTour'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
 import SalesReport from '@/components/SalesReport'
@@ -37,6 +38,34 @@ const FONT_OPTIONS = [
 ]
 
 type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'relatorios' | 'notificacoes' | 'publicar'
+
+const TOUR_STEPS = [
+  {
+    selector: '[data-tour="tabs"]',
+    title: 'Bem-vindo ao construtor!',
+    text: 'Aqui você navega entre as configurações do seu app: informações gerais, marca, módulos, pedidos e publicação.',
+  },
+  {
+    selector: '[data-tour="preview"]',
+    title: 'Prévia em tempo real',
+    text: 'Toda alteração aparece aqui na hora, do jeitinho que o cliente vai ver no celular dele.',
+  },
+  {
+    selector: '[data-tour="modules-panel"]',
+    title: 'Adicione módulos',
+    text: 'Módulos são as funcionalidades do seu app: cardápio, catálogo, formulário de contato e muito mais. Adicione quantos quiser (respeitando o limite do seu plano).',
+  },
+  {
+    selector: '[data-tour="save-button"]',
+    title: 'Não esqueça de salvar',
+    text: 'Toda alteração feita aqui só vale depois de clicar em Salvar.',
+  },
+  {
+    selector: '[data-tour="publish-tab"]',
+    title: 'Publique quando estiver pronto',
+    text: 'Quando o app estiver do jeito que você quer, publique aqui pra ele ficar acessível pros seus clientes.',
+  },
+]
 
 const BASE_TABS: { id: Tab; label: string }[] = [
   { id: 'geral', label: 'Geral' },
@@ -274,11 +303,12 @@ export default function AppEditorPage({ params }: PageProps) {
 
         <div className="lg:grid lg:grid-cols-[1fr_320px] gap-8 items-start">
         <div className="bg-white rounded-lg shadow p-8">
-          <div className="flex gap-2 border-b border-gray-200 mb-8">
+          <div className="flex gap-2 border-b border-gray-200 mb-8" data-tour="tabs">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
+                data-tour={tab.id === 'publicar' ? 'publish-tab' : undefined}
                 onClick={() => setActiveTab(tab.id)}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
                   activeTab === tab.id
@@ -458,7 +488,7 @@ export default function AppEditorPage({ params }: PageProps) {
             )}
 
             {activeTab === 'modulos' && (
-              <div className="space-y-3">
+              <div className="space-y-3" data-tour="modules-panel">
                 <div className="flex items-center justify-end gap-2">
                   <button
                     type="button"
@@ -514,7 +544,7 @@ export default function AppEditorPage({ params }: PageProps) {
               </div>
             )}
 
-            <div className="flex gap-4 pt-4 border-t border-gray-200">
+            <div className="flex gap-4 pt-4 border-t border-gray-200" data-tour="save-button">
               <button
                 type="submit"
                 disabled={saving}
@@ -533,7 +563,7 @@ export default function AppEditorPage({ params }: PageProps) {
           </form>
         </div>
 
-        <div className="mt-8 lg:mt-0 lg:sticky lg:top-8">
+        <div className="mt-8 lg:mt-0 lg:sticky lg:top-8" data-tour="preview">
           <AppPreview
             appId={id}
             appName={name}
@@ -556,6 +586,16 @@ export default function AppEditorPage({ params }: PageProps) {
         </div>
         </div>
       </div>
+
+      {!loading && app && (
+        <GuidedTour
+          storageKey="platform_tour_v1_seen"
+          steps={TOUR_STEPS}
+          onStepChange={(index) => {
+            if (index === 2) setActiveTab('modulos')
+          }}
+        />
+      )}
 
       {configuringModule && (
         <ModuleSettingsModal
