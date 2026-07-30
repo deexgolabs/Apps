@@ -180,6 +180,8 @@ class PushSendLogResponse(BaseModel):
 class AppBase(BaseModel):
     name: str
     description: Optional[str] = None
+    client_name: Optional[str] = None
+    client_email: Optional[str] = None
     template_type: str
 
 
@@ -190,6 +192,8 @@ class AppCreate(AppBase):
 class AppUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    client_name: Optional[str] = None
+    client_email: Optional[str] = None
     config: Optional[dict] = None
     modules: Optional[List[str]] = None
     status: Optional[str] = None

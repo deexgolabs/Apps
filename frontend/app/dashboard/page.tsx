@@ -14,6 +14,16 @@ export default function DashboardPage() {
   const addApp = useAppStore((state) => state.addApp)
   const [loading, setLoading] = useState(true)
   const [duplicatingId, setDuplicatingId] = useState<number | null>(null)
+  const [search, setSearch] = useState('')
+
+  const query = search.trim().toLowerCase()
+  const filteredApps = query
+    ? apps.filter((app) =>
+        [app.name, app.client_name, app.client_email].some((field) =>
+          field?.toLowerCase().includes(query)
+        )
+      )
+    : apps
 
   const handleDuplicate = async (appId: number) => {
     setDuplicatingId(appId)
@@ -55,6 +65,18 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      {!loading && apps.length > 0 && (
+        <div className="mb-6">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome do app ou do cliente..."
+            className="w-full sm:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+          />
+        </div>
+      )}
+
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
@@ -75,13 +97,20 @@ export default function DashboardPage() {
             Crie seu primeiro app →
           </Link>
         </div>
+      ) : filteredApps.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-12 text-center">
+          <p className="text-gray-600">Nenhum app encontrado pra "{search}"</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {apps.map((app) => (
+          {filteredApps.map((app) => (
             <div key={app.id} className="bg-white rounded-lg shadow hover:shadow-lg transition p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
                 {app.name}
               </h3>
+              {app.client_name && (
+                <p className="text-xs text-indigo-600 font-medium mb-1">👤 {app.client_name}</p>
+              )}
               <p className="text-gray-600 text-sm mb-4">
                 {app.description || 'Sem descrição'}
               </p>

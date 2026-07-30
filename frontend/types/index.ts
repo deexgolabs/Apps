@@ -14,6 +14,8 @@ export interface App {
   user_id: number
   name: string
   description: string | null
+  client_name: string | null
+  client_email: string | null
   template_type: string
   status: 'draft' | 'published'
   config: Record<string, any>

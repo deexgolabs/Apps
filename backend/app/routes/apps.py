@@ -77,6 +77,8 @@ async def create_app(
         user_id=current_user.id,
         name=app_data.name,
         description=app_data.description,
+        client_name=app_data.client_name,
+        client_email=app_data.client_email,
         template_type=app_data.template_type,
         status="draft",
         config=config,
@@ -214,6 +216,10 @@ async def update_app(
         app.name = app_data.name
     if app_data.description is not None:
         app.description = app_data.description
+    if app_data.client_name is not None:
+        app.client_name = app_data.client_name
+    if app_data.client_email is not None:
+        app.client_email = app_data.client_email
     if app_data.config is not None:
         app.config = app_data.config
     if app_data.modules is not None:

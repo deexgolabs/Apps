@@ -31,6 +31,8 @@ class App(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
+    client_name = Column(String, nullable=True)  # pra dono de agência organizar apps por cliente
+    client_email = Column(String, nullable=True)
     template_type = Column(String, nullable=False)  # restaurant, store, service, etc
     config = Column(JSON, default=dict)  # cores, logo, textos
     modules = Column(JSON, default=list)  # módulos ativados (lista de nomes)
