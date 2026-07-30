@@ -15,6 +15,7 @@ import PublishPanel from '@/components/PublishPanel'
 import CustomDomainPanel from '@/components/CustomDomainPanel'
 import VersionHistoryPanel from '@/components/VersionHistoryPanel'
 import GuidedTour from '@/components/GuidedTour'
+import ImportFromUrlPanel from '@/components/ImportFromUrlPanel'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
 import SalesReport from '@/components/SalesReport'
@@ -339,6 +340,15 @@ export default function AppEditorPage({ params }: PageProps) {
                 </div>
 
                 <UsagePanel appId={id} />
+
+                <ImportFromUrlPanel
+                  appId={id}
+                  onImported={(result) => {
+                    if (result.name) setName(result.name)
+                    if (result.description) setDescription(result.description)
+                    if (result.image_url) setLogoUrl(result.image_url)
+                  }}
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">

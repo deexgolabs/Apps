@@ -237,6 +237,16 @@ class ResolveDomainResponse(BaseModel):
     app_id: int
 
 
+class ImportFromUrlRequest(BaseModel):
+    url: str
+
+
+class ImportFromUrlResponse(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+
+
 # ===== MODULE SCHEMAS =====
 
 
