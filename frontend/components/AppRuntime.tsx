@@ -351,7 +351,14 @@ function ListModuleContent({
   }
 
   const isAgenda = moduleName === 'agenda_interna'
+  const isBlog = moduleName === 'blog'
   const isGrid = layout === 'grid'
+
+  const formatBrDate = (iso?: string) => {
+    if (!iso) return ''
+    const [y, m, d] = iso.split('-')
+    return d && m && y ? `${d}/${m}/${y}` : iso
+  }
 
   // group_name null vira uma chave própria — trata todas as variações soltas
   // (fluxo antigo) como um único grupo que exige uma escolha, igual antes.
@@ -461,7 +468,16 @@ function ListModuleContent({
   const expandedPanel = (item: ModuleItem) =>
     expandedId === item.id && (
       <div className="px-2 pb-2 space-y-2" onClick={(e) => e.stopPropagation()}>
-        {item.description && <p className="text-xs text-gray-500">{item.description}</p>}
+        {isBlog ? (
+          <>
+            {item.extra?.published_at && (
+              <p className="text-[11px] text-gray-400">{formatBrDate(item.extra.published_at)}</p>
+            )}
+            {item.extra?.body && <p className="text-xs text-gray-700 whitespace-pre-line">{item.extra.body}</p>}
+          </>
+        ) : (
+          item.description && <p className="text-xs text-gray-500">{item.description}</p>
+        )}
         {item.extra?.gallery?.length > 0 && (
           <div className="flex gap-1.5 overflow-x-auto">
             {item.extra.gallery.map((url: string, i: number) => (
@@ -500,7 +516,13 @@ function ListModuleContent({
                 · {item.extra?.data} {item.extra?.hora}
               </span>
             )}
+            {isBlog && item.extra?.published_at && (
+              <span className="text-gray-400 font-normal"> · {formatBrDate(item.extra.published_at)}</span>
+            )}
           </p>
+          {isBlog && item.description && (
+            <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
+          )}
           {item.avg_rating != null && (
             <p className="text-[11px] text-amber-500">
               {'★'.repeat(Math.round(item.avg_rating))} ({item.review_count})
@@ -549,6 +571,9 @@ function ListModuleContent({
           <p className="text-xs">{priceDisplay(item)}</p>
           {isAgenda && (item.extra?.data || item.extra?.hora) && (
             <p className="text-[11px] text-gray-500">{item.extra?.data} {item.extra?.hora}</p>
+          )}
+          {isBlog && item.extra?.published_at && (
+            <p className="text-[11px] text-gray-400">{formatBrDate(item.extra.published_at)}</p>
           )}
           {item.avg_rating != null && (
             <p className="text-[11px] text-amber-500">
@@ -602,7 +627,10 @@ function ListModuleContent({
     </div>
   )
 
-  const displayItems = favoritesOnly ? items.filter((i) => wishlistIds.has(i.id)) : items
+  const filteredItems = favoritesOnly ? items.filter((i) => wishlistIds.has(i.id)) : items
+  const displayItems = isBlog
+    ? [...filteredItems].sort((a, b) => (b.extra?.published_at || '').localeCompare(a.extra?.published_at || ''))
+    : filteredItems
 
   if (loading) {
     return (

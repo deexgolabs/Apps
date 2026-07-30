@@ -24,6 +24,7 @@ export const MODULE_VECTOR_ICONS: Record<string, LucideIcon> = {
   slider_imagens: Images,
   chat_tawkto: MessageSquare,
   google_admob: Megaphone,
+  blog: Newspaper,
   cardapio: Pizza,
   catalogo: ShoppingBag,
   lista_itens: List,

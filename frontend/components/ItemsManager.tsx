@@ -18,6 +18,7 @@ const LOW_STOCK_THRESHOLD = 5
 
 export default function ItemsManager({ appId, moduleName, supportsCategories }: ItemsManagerProps) {
   const isAgenda = moduleName === 'agenda_interna'
+  const isBlog = moduleName === 'blog'
   const [categories, setCategories] = useState<ModuleCategory[]>([])
   const [items, setItems] = useState<ModuleItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,6 +36,8 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const [itemGallery, setItemGallery] = useState<string[]>([])
   const [itemFeatured, setItemFeatured] = useState(false)
   const [itemPromoPrice, setItemPromoPrice] = useState('')
+  const [itemBody, setItemBody] = useState('')
+  const [itemPublishedAt, setItemPublishedAt] = useState('')
 
   const [variations, setVariations] = useState<ItemVariation[]>([])
   const [variationName, setVariationName] = useState('')
@@ -103,6 +106,8 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setItemGallery([])
     setItemFeatured(false)
     setItemPromoPrice('')
+    setItemBody('')
+    setItemPublishedAt('')
     setVariations([])
     setVariationName('')
     setVariationPrice('')
@@ -123,6 +128,8 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setItemGallery(item.extra?.gallery || [])
     setItemFeatured(!!item.extra?.featured)
     setItemPromoPrice(item.extra?.promo_price != null ? String(item.extra.promo_price) : '')
+    setItemBody(item.extra?.body || '')
+    setItemPublishedAt(item.extra?.published_at || '')
     setVariations(item.variations || [])
   }
 
@@ -132,19 +139,21 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
 
     const extra = isAgenda
       ? { data: itemData, hora: itemHora }
-      : {
-          gallery: itemGallery,
-          featured: itemFeatured,
-          promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
-        }
+      : isBlog
+        ? { body: itemBody, published_at: itemPublishedAt || undefined }
+        : {
+            gallery: itemGallery,
+            featured: itemFeatured,
+            promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
+          }
 
     const payload = {
       name: itemName,
       description: itemDescription || null,
-      price: isAgenda ? null : itemPrice ? parseFloat(itemPrice) : null,
+      price: isAgenda || isBlog ? null : itemPrice ? parseFloat(itemPrice) : null,
       image_url: isAgenda ? null : itemImageUrl || null,
       category_id: itemCategoryId ? Number(itemCategoryId) : null,
-      stock: isAgenda ? null : itemStock.trim() ? parseInt(itemStock, 10) : null,
+      stock: isAgenda || isBlog ? null : itemStock.trim() ? parseInt(itemStock, 10) : null,
       extra,
     }
 
@@ -302,7 +311,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
           <textarea
             value={itemDescription}
             onChange={(e) => setItemDescription(e.target.value)}
-            placeholder="Descrição (opcional)"
+            placeholder={isBlog ? 'Resumo/chamada (opcional)' : 'Descrição (opcional)'}
             className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
           />
           {isAgenda ? (
@@ -320,6 +329,24 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                 className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
               />
             </div>
+          ) : isBlog ? (
+            <>
+              <input
+                type="date"
+                value={itemPublishedAt}
+                onChange={(e) => setItemPublishedAt(e.target.value)}
+                aria-label="Data de publicação"
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <textarea
+                value={itemBody}
+                onChange={(e) => setItemBody(e.target.value)}
+                placeholder="Conteúdo completo do post"
+                rows={6}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <ImageUploadField label="Imagem de capa (opcional)" value={itemImageUrl} onChange={setItemImageUrl} />
+            </>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2">
@@ -374,7 +401,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
             </select>
           )}
 
-          {editingId && !isAgenda && (
+          {editingId && !isAgenda && !isBlog && (
             <div className="border-t border-gray-200 pt-2 mt-2">
               <p className="text-xs font-semibold text-gray-600 mb-1.5">
                 Variações (tamanho, sabor, cor...) — quando existem, o preço/estoque acima é ignorado.
@@ -461,7 +488,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700">Itens ({items.length})</p>
-          {!isAgenda && (
+          {!isAgenda && !isBlog && (
             <div className="flex gap-2">
               <button
                 type="button"
@@ -518,6 +545,9 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                           {' '}
                           · {item.extra?.data} {item.extra?.hora}
                         </span>
+                      )}
+                      {isBlog && item.extra?.published_at && (
+                        <span className="text-gray-500 font-normal"> · {item.extra.published_at}</span>
                       )}
                     </p>
                     {(item.description || categoryName(item.category_id)) && (

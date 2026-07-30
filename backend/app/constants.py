@@ -115,6 +115,14 @@ SEED_MODULES = [
         "features": ["ID da unidade de anúncio"],
     },
     {
+        "name": "blog",
+        "description": "Blog ou área de notícias com múltiplos posts",
+        "category": "content",
+        "icon_url": None,
+        "requires_plan": "free",
+        "features": ["Posts com título, resumo e conteúdo completo", "Data de publicação", "Imagem de capa"],
+    },
+    {
         "name": "cardapio",
         "description": "Cardápio digital com categorias e itens",
         "category": "food",
@@ -330,6 +338,7 @@ LIST_MODULES = {
     "galeria_imagens": False,
     "guia_empresas": False,
     "agenda_interna": False,
+    "blog": False,
 }
 
 ORDER_STATUS_LABELS = {
