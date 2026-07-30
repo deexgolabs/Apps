@@ -123,6 +123,14 @@ SEED_MODULES = [
         "features": ["Posts com título, resumo e conteúdo completo", "Data de publicação", "Imagem de capa"],
     },
     {
+        "name": "conteudo_pago",
+        "description": "Conteúdo exclusivo desbloqueado mediante pagamento (paywall)",
+        "category": "monetization",
+        "icon_url": None,
+        "requires_plan": "free",
+        "features": ["Prévia gratuita + conteúdo completo pago", "Desbloqueio via Mercado Pago/PayPal/PagSeguro"],
+    },
+    {
         "name": "venda_ingressos",
         "description": "Venda de ingressos para eventos, com data, local e vagas limitadas",
         "category": "events",
@@ -348,6 +356,7 @@ LIST_MODULES = {
     "agenda_interna": False,
     "blog": False,
     "venda_ingressos": False,
+    "conteudo_pago": False,
 }
 
 ORDER_STATUS_LABELS = {

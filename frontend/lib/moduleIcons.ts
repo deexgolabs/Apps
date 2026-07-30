@@ -26,6 +26,7 @@ export const MODULE_VECTOR_ICONS: Record<string, LucideIcon> = {
   google_admob: Megaphone,
   blog: Newspaper,
   venda_ingressos: Ticket,
+  conteudo_pago: Lock,
   cardapio: Pizza,
   catalogo: ShoppingBag,
   lista_itens: List,

@@ -132,9 +132,9 @@ def test_update_order_status_notifies_end_user_without_crashing(client, register
     assert updated.json()["status"] == "confirmed"
 
 
-def _create_item(client, app_id, owner_headers, name="Pizza", price=30.0, stock=None):
+def _create_item(client, app_id, owner_headers, name="Pizza", price=30.0, stock=None, module_name="cardapio"):
     response = client.post(
-        f"/api/apps/{app_id}/modules/cardapio/items",
+        f"/api/apps/{app_id}/modules/{module_name}/items",
         json={"name": name, "price": price, "stock": stock},
         headers=owner_headers,
     )
@@ -556,3 +556,67 @@ def test_close_table_returns_404_when_no_open_orders(client, register_user):
 
     response = client.put(f"/api/apps/{app_id}/orders/close-table", json={"table_number": "99"}, headers=owner_headers)
     assert response.status_code == 404
+
+
+def test_unlocked_items_reflects_confirmed_purchase_only(client, register_user, db_session):
+    """Paywall: um item só aparece em unlocked-items depois que o pedido do
+    cliente que o comprou passa a status confirmed — pending não desbloqueia."""
+    app_id, owner_headers = _published_app(client, register_user, "paywallunlock@example.com")
+    item_id = _create_item(
+        client, app_id, owner_headers, name="Artigo Exclusivo", price=15.0, stock=None, module_name="conteudo_pago"
+    )
+    end_user_headers = _end_user_headers(client, app_id, "assinante@example.com")
+
+    checkout = client.post(
+        f"/api/apps/{app_id}/modules/conteudo_pago/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}]},
+        headers=end_user_headers,
+    )
+    assert checkout.status_code == 201
+    order_id = checkout.json()["id"]
+
+    still_locked = client.get(
+        f"/api/apps/{app_id}/modules/conteudo_pago/unlocked-items", headers=end_user_headers
+    )
+    assert still_locked.status_code == 200
+    assert still_locked.json() == []
+
+    confirm = client.put(
+        f"/api/apps/{app_id}/orders/{order_id}", json={"status": "confirmed"}, headers=owner_headers
+    )
+    assert confirm.status_code == 200
+
+    unlocked = client.get(
+        f"/api/apps/{app_id}/modules/conteudo_pago/unlocked-items", headers=end_user_headers
+    )
+    assert unlocked.status_code == 200
+    assert unlocked.json() == [item_id]
+
+
+def test_unlocked_items_requires_end_user_login(client, register_user):
+    app_id, _ = _published_app(client, register_user, "paywallnoauth@example.com")
+    response = client.get(f"/api/apps/{app_id}/modules/conteudo_pago/unlocked-items")
+    assert response.status_code in (401, 403)
+
+
+def test_unlocked_items_isolated_per_end_user(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "paywallisolation@example.com")
+    item_id = _create_item(
+        client, app_id, owner_headers, name="Artigo B", price=10.0, stock=None, module_name="conteudo_pago"
+    )
+    buyer_headers = _end_user_headers(client, app_id, "comprador@example.com")
+    other_headers = _end_user_headers(client, app_id, "outro_cliente@example.com")
+
+    checkout = client.post(
+        f"/api/apps/{app_id}/modules/conteudo_pago/cart-checkout",
+        json={"items": [{"item_id": item_id, "quantity": 1}]},
+        headers=buyer_headers,
+    )
+    order_id = checkout.json()["id"]
+    client.put(f"/api/apps/{app_id}/orders/{order_id}", json={"status": "confirmed"}, headers=owner_headers)
+
+    buyer_view = client.get(f"/api/apps/{app_id}/modules/conteudo_pago/unlocked-items", headers=buyer_headers)
+    assert buyer_view.json() == [item_id]
+
+    other_view = client.get(f"/api/apps/{app_id}/modules/conteudo_pago/unlocked-items", headers=other_headers)
+    assert other_view.json() == []

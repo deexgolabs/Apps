@@ -549,6 +549,31 @@ async def list_my_orders(
     )
 
 
+@router.get("/modules/{module_name}/unlocked-items", response_model=List[int])
+async def list_unlocked_items(
+    app_id: int,
+    module_name: str,
+    db: Session = Depends(get_db),
+    end_user: AppUser = Depends(get_current_end_user),
+):
+    """IDs dos itens (ex: posts de conteúdo pago) que o cliente final já
+    desbloqueou — pedido próprio com pagamento confirmado contendo o item."""
+    rows = (
+        db.query(OrderItem.module_item_id)
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(
+            Order.app_id == app_id,
+            Order.module_name == module_name,
+            Order.end_user_id == end_user.id,
+            Order.status.in_(["confirmed", "completed"]),
+            OrderItem.module_item_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    return [row[0] for row in rows]
+
+
 CANCELABLE_STATUSES = {"pending", "confirmed"}
 
 

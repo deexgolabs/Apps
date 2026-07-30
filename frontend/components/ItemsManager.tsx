@@ -20,6 +20,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const isAgenda = moduleName === 'agenda_interna'
   const isBlog = moduleName === 'blog'
   const isEvent = moduleName === 'venda_ingressos'
+  const isPaywall = moduleName === 'conteudo_pago'
   const [categories, setCategories] = useState<ModuleCategory[]>([])
   const [items, setItems] = useState<ModuleItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -145,20 +146,22 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       ? { data: itemData, hora: itemHora }
       : isBlog
         ? { body: itemBody, published_at: itemPublishedAt || undefined }
-        : isEvent
-          ? {
-              data: itemData,
-              hora: itemHora,
-              location: itemLocation,
-              gallery: itemGallery,
-              featured: itemFeatured,
-              promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
-            }
-          : {
-              gallery: itemGallery,
-              featured: itemFeatured,
-              promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
-            }
+        : isPaywall
+          ? { body: itemBody }
+          : isEvent
+            ? {
+                data: itemData,
+                hora: itemHora,
+                location: itemLocation,
+                gallery: itemGallery,
+                featured: itemFeatured,
+                promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
+              }
+            : {
+                gallery: itemGallery,
+                featured: itemFeatured,
+                promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
+              }
 
     const payload = {
       name: itemName,
@@ -166,7 +169,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       price: isAgenda || isBlog ? null : itemPrice ? parseFloat(itemPrice) : null,
       image_url: isAgenda ? null : itemImageUrl || null,
       category_id: itemCategoryId ? Number(itemCategoryId) : null,
-      stock: isAgenda || isBlog ? null : itemStock.trim() ? parseInt(itemStock, 10) : null,
+      stock: isAgenda || isBlog || isPaywall ? null : itemStock.trim() ? parseInt(itemStock, 10) : null,
       extra,
     }
 
@@ -324,7 +327,15 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
           <textarea
             value={itemDescription}
             onChange={(e) => setItemDescription(e.target.value)}
-            placeholder={isBlog ? 'Resumo/chamada (opcional)' : isEvent ? 'Descrição do evento (opcional)' : 'Descrição (opcional)'}
+            placeholder={
+              isBlog
+                ? 'Resumo/chamada (opcional)'
+                : isEvent
+                  ? 'Descrição do evento (opcional)'
+                  : isPaywall
+                    ? 'Prévia gratuita (visível antes de desbloquear)'
+                    : 'Descrição (opcional)'
+            }
             className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
           />
           {isAgenda ? (
@@ -355,6 +366,27 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                 value={itemBody}
                 onChange={(e) => setItemBody(e.target.value)}
                 placeholder="Conteúdo completo do post"
+                rows={6}
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <ImageUploadField label="Imagem de capa (opcional)" value={itemImageUrl} onChange={setItemImageUrl} />
+            </>
+          ) : isPaywall ? (
+            <>
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                value={itemPrice}
+                onChange={(e) => setItemPrice(e.target.value)}
+                placeholder="Preço para desbloquear"
+                required
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+              <textarea
+                value={itemBody}
+                onChange={(e) => setItemBody(e.target.value)}
+                placeholder="Conteúdo completo (só aparece depois de desbloqueado)"
                 rows={6}
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
               />
@@ -447,7 +479,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
             </select>
           )}
 
-          {editingId && !isAgenda && !isBlog && (
+          {editingId && !isAgenda && !isBlog && !isPaywall && (
             <div className="border-t border-gray-200 pt-2 mt-2">
               <p className="text-xs font-semibold text-gray-600 mb-1.5">
                 Variações (tamanho, sabor, cor...) — quando existem, o preço/estoque acima é ignorado.
@@ -534,7 +566,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-sm font-medium text-gray-700">Itens ({items.length})</p>
-          {!isAgenda && !isBlog && (
+          {!isAgenda && !isBlog && !isPaywall && (
             <div className="flex gap-2">
               <button
                 type="button"

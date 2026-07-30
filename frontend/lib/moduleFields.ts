@@ -188,6 +188,7 @@ export const LIST_MODULES: Record<string, boolean> = {
   mercado_livre: false,
   blog: false,
   venda_ingressos: false,
+  conteudo_pago: false,
 }
 
 // Módulos de lista que permitem adicionar itens ao carrinho e fechar pedido.

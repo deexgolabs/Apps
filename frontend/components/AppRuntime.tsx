@@ -265,6 +265,7 @@ function ListModuleContent({
   layout,
   cartEnabled,
   horarioFuncionamento,
+  availableGateways,
 }: {
   mode: RuntimeMode
   appId: string
@@ -272,6 +273,7 @@ function ListModuleContent({
   layout: 'list' | 'grid'
   cartEnabled?: boolean
   horarioFuncionamento?: string
+  availableGateways?: string[]
 }) {
   const cart = useOptionalCart()
   const [items, setItems] = useState<ModuleItem[]>([])
@@ -283,9 +285,13 @@ function ListModuleContent({
   const [selectedVariations, setSelectedVariations] = useState<Record<number, number[]>>({})
   const [wishlistIds, setWishlistIds] = useState<Set<number>>(new Set())
   const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const [unlockedIds, setUnlockedIds] = useState<Set<number>>(new Set())
+  const [unlockingId, setUnlockingId] = useState<number | null>(null)
+  const [pendingUnlockOrder, setPendingUnlockOrder] = useState<{ itemId: number; orderId: number } | null>(null)
   const [hasEndUserSession, setHasEndUserSession] = useState(false)
   const supportsCategories = LIST_MODULES[moduleName]
   const searchEnabled = cartEnabled && mode === 'public'
+  const isPaywall = moduleName === 'conteudo_pago'
 
   useEffect(() => {
     const fetchData = async () => {
@@ -317,15 +323,23 @@ function ListModuleContent({
   }, [mode, appId, moduleName, supportsCategories, search, categoryFilter])
 
   useEffect(() => {
-    if (mode !== 'public' || !cartEnabled) return
+    if (mode !== 'public' || (!cartEnabled && !isPaywall)) return
     const hasSession = !!localStorage.getItem(endUserSessionKey(appId))
     setHasEndUserSession(hasSession)
     if (!hasSession) return
-    publicApi
-      .get(`/api/apps/${appId}/wishlist/me`, { headers: endUserAuthHeader(appId) })
-      .then((res) => setWishlistIds(new Set(res.data.map((w: { item_id: number }) => w.item_id))))
-      .catch(() => {})
-  }, [mode, appId, cartEnabled])
+    if (cartEnabled) {
+      publicApi
+        .get(`/api/apps/${appId}/wishlist/me`, { headers: endUserAuthHeader(appId) })
+        .then((res) => setWishlistIds(new Set(res.data.map((w: { item_id: number }) => w.item_id))))
+        .catch(() => {})
+    }
+    if (isPaywall) {
+      publicApi
+        .get(`/api/apps/${appId}/modules/${moduleName}/unlocked-items`, { headers: endUserAuthHeader(appId) })
+        .then((res) => setUnlockedIds(new Set(res.data as number[])))
+        .catch(() => {})
+    }
+  }, [mode, appId, cartEnabled, isPaywall, moduleName])
 
   const toggleWishlist = async (item: ModuleItem) => {
     if (!hasEndUserSession) {
@@ -347,6 +361,54 @@ function ListModuleContent({
       }
     } catch (error) {
       showApiError(error, 'Não foi possível atualizar seus favoritos')
+    }
+  }
+
+  const handleUnlock = async (item: ModuleItem) => {
+    if (!hasEndUserSession) {
+      toast.error('Faça login para desbloquear este conteúdo')
+      return
+    }
+    if (!availableGateways || availableGateways.length === 0) {
+      toast.error('O dono do app ainda não configurou um meio de pagamento para vender conteúdo pago.')
+      return
+    }
+    setUnlockingId(item.id)
+    try {
+      const response = await publicApi.post(
+        `/api/apps/${appId}/modules/${moduleName}/cart-checkout`,
+        { items: [{ item_id: item.id, quantity: 1 }], gateway: availableGateways[0] },
+        { headers: endUserAuthHeader(appId) }
+      )
+      const checkoutUrl = response.data.checkout_url
+      if (checkoutUrl) {
+        window.open(checkoutUrl, '_blank', 'noopener,noreferrer')
+        setPendingUnlockOrder({ itemId: item.id, orderId: response.data.id })
+      } else {
+        toast.error('A gateway não retornou um link de pagamento')
+      }
+    } catch (error) {
+      showApiError(error, 'Erro ao iniciar o desbloqueio')
+    } finally {
+      setUnlockingId(null)
+    }
+  }
+
+  const handleConfirmUnlockPayment = async () => {
+    if (!pendingUnlockOrder) return
+    try {
+      const response = await publicApi.post(
+        `/api/apps/${appId}/orders/${pendingUnlockOrder.orderId}/confirm-payment`
+      )
+      if (response.data.status === 'confirmed') {
+        toast.success('Conteúdo desbloqueado!')
+        setUnlockedIds((prev) => new Set(prev).add(pendingUnlockOrder.itemId))
+        setPendingUnlockOrder(null)
+      } else {
+        toast.error('Ainda não identificamos o pagamento. Conclua o pagamento e tente novamente.')
+      }
+    } catch (error) {
+      showApiError(error, 'Erro ao confirmar pagamento')
     }
   }
 
@@ -476,6 +538,35 @@ function ListModuleContent({
             )}
             {item.extra?.body && <p className="text-xs text-gray-700 whitespace-pre-line">{item.extra.body}</p>}
           </>
+        ) : isPaywall ? (
+          unlockedIds.has(item.id) ? (
+            <>
+              <p className="text-[11px] text-green-600 font-medium">🔓 Desbloqueado</p>
+              {item.extra?.body && <p className="text-xs text-gray-700 whitespace-pre-line">{item.extra.body}</p>}
+            </>
+          ) : pendingUnlockOrder?.itemId === item.id ? (
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-600">
+                Complete o pagamento na aba que abrimos e depois confirme aqui.
+              </p>
+              <button
+                type="button"
+                onClick={handleConfirmUnlockPayment}
+                className="text-xs font-semibold px-2 py-1 rounded bg-indigo-600 text-white"
+              >
+                Já paguei
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleUnlock(item)}
+              disabled={unlockingId === item.id}
+              className="text-xs font-semibold px-3 py-1.5 rounded bg-indigo-600 text-white disabled:opacity-50"
+            >
+              {unlockingId === item.id ? 'Abrindo pagamento...' : `🔒 Desbloquear por R$ ${(item.price || 0).toFixed(2)}`}
+            </button>
+          )
         ) : (
           item.description && <p className="text-xs text-gray-500">{item.description}</p>
         )}
@@ -526,9 +617,15 @@ function ListModuleContent({
                 · {formatBrDate(item.extra?.data)} {item.extra?.hora}
               </span>
             )}
+            {isPaywall && (
+              <span className="text-gray-400 font-normal"> · {unlockedIds.has(item.id) ? '🔓' : '🔒'}</span>
+            )}
           </p>
           {isEvent && item.extra?.location && (
             <p className="text-xs text-gray-500 truncate">📍 {item.extra.location}</p>
+          )}
+          {isPaywall && item.description && (
+            <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
           )}
           {isBlog && item.description && (
             <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
@@ -590,6 +687,9 @@ function ListModuleContent({
           )}
           {isBlog && item.extra?.published_at && (
             <p className="text-[11px] text-gray-400">{formatBrDate(item.extra.published_at)}</p>
+          )}
+          {isPaywall && (
+            <p className="text-[11px] text-gray-400">{unlockedIds.has(item.id) ? '🔓 Desbloqueado' : '🔒 Bloqueado'}</p>
           )}
           {item.avg_rating != null && (
             <p className="text-[11px] text-amber-500">
@@ -1731,6 +1831,11 @@ export default function AppRuntime({
                 layout={configs[selectedModule]?.layout === 'grid' ? 'grid' : 'list'}
                 cartEnabled={mode === 'public' && CART_ENABLED_MODULES.includes(selectedModule)}
                 horarioFuncionamento={configs['pagamento_entrega']?.horario_funcionamento}
+                availableGateways={PAYMENT_GATEWAY_MODULES.filter(
+                  (gw) =>
+                    activeModules.includes(gw) &&
+                    GATEWAY_CREDENTIAL_KEYS[gw].every((key) => configs[gw]?.[key])
+                )}
               />
             ) : FIXED_FORM_MODULES.includes(selectedModule) ? (
               <FormModuleContent appId={appId} moduleName={selectedModule} />
