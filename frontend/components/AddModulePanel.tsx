@@ -22,10 +22,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   forms: 'Formulários',
   engagement: 'Engajamento',
   payments: 'Pagamentos',
+  events: 'Eventos',
 }
 
 const CATEGORY_ORDER = [
-  'content', 'food', 'ecommerce', 'forms', 'communication', 'engagement',
+  'content', 'food', 'ecommerce', 'events', 'forms', 'communication', 'engagement',
   'payments', 'location', 'media', 'integration', 'monetization',
 ]
 

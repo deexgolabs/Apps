@@ -352,6 +352,7 @@ function ListModuleContent({
 
   const isAgenda = moduleName === 'agenda_interna'
   const isBlog = moduleName === 'blog'
+  const isEvent = moduleName === 'venda_ingressos'
   const isGrid = layout === 'grid'
 
   const formatBrDate = (iso?: string) => {
@@ -519,7 +520,16 @@ function ListModuleContent({
             {isBlog && item.extra?.published_at && (
               <span className="text-gray-400 font-normal"> · {formatBrDate(item.extra.published_at)}</span>
             )}
+            {isEvent && (item.extra?.data || item.extra?.hora) && (
+              <span className="text-gray-500 font-normal">
+                {' '}
+                · {formatBrDate(item.extra?.data)} {item.extra?.hora}
+              </span>
+            )}
           </p>
+          {isEvent && item.extra?.location && (
+            <p className="text-xs text-gray-500 truncate">📍 {item.extra.location}</p>
+          )}
           {isBlog && item.description && (
             <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
           )}
@@ -571,6 +581,12 @@ function ListModuleContent({
           <p className="text-xs">{priceDisplay(item)}</p>
           {isAgenda && (item.extra?.data || item.extra?.hora) && (
             <p className="text-[11px] text-gray-500">{item.extra?.data} {item.extra?.hora}</p>
+          )}
+          {isEvent && (item.extra?.data || item.extra?.hora) && (
+            <p className="text-[11px] text-gray-500">{formatBrDate(item.extra?.data)} {item.extra?.hora}</p>
+          )}
+          {isEvent && item.extra?.location && (
+            <p className="text-[11px] text-gray-500 truncate">📍 {item.extra.location}</p>
           )}
           {isBlog && item.extra?.published_at && (
             <p className="text-[11px] text-gray-400">{formatBrDate(item.extra.published_at)}</p>
@@ -630,7 +646,9 @@ function ListModuleContent({
   const filteredItems = favoritesOnly ? items.filter((i) => wishlistIds.has(i.id)) : items
   const displayItems = isBlog
     ? [...filteredItems].sort((a, b) => (b.extra?.published_at || '').localeCompare(a.extra?.published_at || ''))
-    : filteredItems
+    : isEvent
+      ? [...filteredItems].sort((a, b) => (a.extra?.data || '').localeCompare(b.extra?.data || ''))
+      : filteredItems
 
   if (loading) {
     return (

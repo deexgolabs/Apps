@@ -123,6 +123,14 @@ SEED_MODULES = [
         "features": ["Posts com título, resumo e conteúdo completo", "Data de publicação", "Imagem de capa"],
     },
     {
+        "name": "venda_ingressos",
+        "description": "Venda de ingressos para eventos, com data, local e vagas limitadas",
+        "category": "events",
+        "icon_url": None,
+        "requires_plan": "free",
+        "features": ["Eventos com data, horário e local", "Preço e vagas limitadas", "Compra pelo carrinho"],
+    },
+    {
         "name": "cardapio",
         "description": "Cardápio digital com categorias e itens",
         "category": "food",
@@ -339,6 +347,7 @@ LIST_MODULES = {
     "guia_empresas": False,
     "agenda_interna": False,
     "blog": False,
+    "venda_ingressos": False,
 }
 
 ORDER_STATUS_LABELS = {

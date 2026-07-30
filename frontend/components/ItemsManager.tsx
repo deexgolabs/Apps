@@ -19,6 +19,7 @@ const LOW_STOCK_THRESHOLD = 5
 export default function ItemsManager({ appId, moduleName, supportsCategories }: ItemsManagerProps) {
   const isAgenda = moduleName === 'agenda_interna'
   const isBlog = moduleName === 'blog'
+  const isEvent = moduleName === 'venda_ingressos'
   const [categories, setCategories] = useState<ModuleCategory[]>([])
   const [items, setItems] = useState<ModuleItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,6 +39,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
   const [itemPromoPrice, setItemPromoPrice] = useState('')
   const [itemBody, setItemBody] = useState('')
   const [itemPublishedAt, setItemPublishedAt] = useState('')
+  const [itemLocation, setItemLocation] = useState('')
 
   const [variations, setVariations] = useState<ItemVariation[]>([])
   const [variationName, setVariationName] = useState('')
@@ -108,6 +110,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setItemPromoPrice('')
     setItemBody('')
     setItemPublishedAt('')
+    setItemLocation('')
     setVariations([])
     setVariationName('')
     setVariationPrice('')
@@ -130,6 +133,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     setItemPromoPrice(item.extra?.promo_price != null ? String(item.extra.promo_price) : '')
     setItemBody(item.extra?.body || '')
     setItemPublishedAt(item.extra?.published_at || '')
+    setItemLocation(item.extra?.location || '')
     setVariations(item.variations || [])
   }
 
@@ -141,11 +145,20 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
       ? { data: itemData, hora: itemHora }
       : isBlog
         ? { body: itemBody, published_at: itemPublishedAt || undefined }
-        : {
-            gallery: itemGallery,
-            featured: itemFeatured,
-            promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
-          }
+        : isEvent
+          ? {
+              data: itemData,
+              hora: itemHora,
+              location: itemLocation,
+              gallery: itemGallery,
+              featured: itemFeatured,
+              promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
+            }
+          : {
+              gallery: itemGallery,
+              featured: itemFeatured,
+              promo_price: itemPromoPrice.trim() ? parseFloat(itemPromoPrice) : undefined,
+            }
 
     const payload = {
       name: itemName,
@@ -311,7 +324,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
           <textarea
             value={itemDescription}
             onChange={(e) => setItemDescription(e.target.value)}
-            placeholder={isBlog ? 'Resumo/chamada (opcional)' : 'Descrição (opcional)'}
+            placeholder={isBlog ? 'Resumo/chamada (opcional)' : isEvent ? 'Descrição do evento (opcional)' : 'Descrição (opcional)'}
             className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
           />
           {isAgenda ? (
@@ -349,13 +362,46 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
             </>
           ) : (
             <>
+              {isEvent && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={itemData}
+                      onChange={(e) => setItemData(e.target.value)}
+                      aria-label="Data do evento"
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                    />
+                    <input
+                      type="time"
+                      value={itemHora}
+                      onChange={(e) => setItemHora(e.target.value)}
+                      aria-label="Horário do evento"
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={itemLocation}
+                    onChange={(e) => setItemLocation(e.target.value)}
+                    placeholder="Local do evento"
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                  />
+                </>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number"
                   step="0.01"
                   value={itemPrice}
                   onChange={(e) => setItemPrice(e.target.value)}
-                  placeholder={variations.length > 0 ? 'Preço (ignorado — usa variações)' : 'Preço (opcional)'}
+                  placeholder={
+                    variations.length > 0
+                      ? 'Preço (ignorado — usa variações)'
+                      : isEvent
+                        ? 'Preço do ingresso'
+                        : 'Preço (opcional)'
+                  }
                   disabled={variations.length > 0}
                   className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:bg-gray-100"
                 />
@@ -365,7 +411,7 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                   min="0"
                   value={itemStock}
                   onChange={(e) => setItemStock(e.target.value)}
-                  placeholder="Estoque (ilimitado)"
+                  placeholder={isEvent ? 'Vagas (ilimitado)' : 'Estoque (ilimitado)'}
                   disabled={variations.length > 0}
                   className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:bg-gray-100"
                 />
@@ -548,6 +594,15 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                       )}
                       {isBlog && item.extra?.published_at && (
                         <span className="text-gray-500 font-normal"> · {item.extra.published_at}</span>
+                      )}
+                      {isEvent && (item.extra?.data || item.extra?.hora) && (
+                        <span className="text-gray-500 font-normal">
+                          {' '}
+                          · {item.extra?.data} {item.extra?.hora}
+                        </span>
+                      )}
+                      {isEvent && item.extra?.location && (
+                        <span className="text-gray-500 font-normal"> · {item.extra.location}</span>
                       )}
                     </p>
                     {(item.description || categoryName(item.category_id)) && (

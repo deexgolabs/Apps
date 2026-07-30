@@ -4,7 +4,7 @@ import {
   Building2, Phone, Truck, FileEdit, Camera, Receipt, Package, Lock, Star,
   CalendarDays, CreditCard, Banknote, Bell, ShoppingCart, Heart, Gift, Tag,
   Clock, User, Users, Settings, Home, Award, Zap, Wallet, Music, DollarSign,
-  UserPlus, Landmark,
+  UserPlus, Landmark, Ticket,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -25,6 +25,7 @@ export const MODULE_VECTOR_ICONS: Record<string, LucideIcon> = {
   chat_tawkto: MessageSquare,
   google_admob: Megaphone,
   blog: Newspaper,
+  venda_ingressos: Ticket,
   cardapio: Pizza,
   catalogo: ShoppingBag,
   lista_itens: List,
