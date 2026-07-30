@@ -38,11 +38,65 @@ const TEMPLATES: Template[] = [
 
 const STEPS = ['Nome', 'Template', 'Marca', 'Preview'] as const
 
+// Mockup de telefone reutilizado tanto na prévia ao vivo da etapa de escolha
+// de template (antes de confirmar) quanto na prévia final da última etapa
+// (já com as cores customizadas na etapa Marca) — mesma aparência, fontes
+// de cor/módulos diferentes conforme o chamador.
+function TemplatePhonePreview({
+  platform,
+  primaryColor,
+  secondaryColor,
+  logoUrl,
+  appName,
+  template,
+  moduleByName,
+}: {
+  platform: 'android' | 'ios'
+  primaryColor: string
+  secondaryColor: string
+  logoUrl: string
+  appName: string
+  template: Template | undefined
+  moduleByName: Map<string, Module>
+}) {
+  return (
+    <PhoneFrame platform={platform}>
+      <div className="h-10 flex items-center justify-between px-3 shrink-0" style={{ backgroundColor: primaryColor }}>
+        <span className="text-white text-lg leading-none">☰</span>
+        {logoUrl ? (
+          <img src={logoUrl} alt={appName} className="h-6 object-contain" />
+        ) : (
+          <span className="text-white text-sm font-semibold truncate">{appName || 'Meu App'}</span>
+        )}
+        <span className="w-4" />
+      </div>
+      <div className="p-4" style={{ borderTop: `2px solid ${secondaryColor}` }}>
+        {template ? (
+          <>
+            <p className="text-xs text-gray-400 mb-3">Módulos incluídos no template "{template.name}":</p>
+            <div className="space-y-2">
+              {template.modules.map((name) => (
+                <div key={name} className="flex items-center gap-2 text-sm text-gray-700 border-b border-gray-100 pb-2">
+                  <ModuleIcon moduleName={name} color={primaryColor} size={14} />
+                  {moduleByName.get(name)?.description || name}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-gray-400 text-center py-8">Passe o mouse sobre um template pra ver a prévia aqui.</p>
+        )}
+      </div>
+    </PhoneFrame>
+  )
+}
+
 export default function NewAppPage() {
   const [step, setStep] = useState(0)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [templateId, setTemplateId] = useState('')
+  const [previewTemplateId, setPreviewTemplateId] = useState('')
   const [primaryColor, setPrimaryColor] = useState('#4F46E5')
   const [secondaryColor, setSecondaryColor] = useState('#10B981')
   const [logoUrl, setLogoUrl] = useState('')
@@ -58,6 +112,7 @@ export default function NewAppPage() {
   }, [])
 
   const template = TEMPLATES.find((t) => t.id === templateId)
+  const previewedTemplate = TEMPLATES.find((t) => t.id === (previewTemplateId || templateId))
   const moduleByName = new Map(modules.map((m) => [m.name, m]))
 
   const selectTemplate = (t: Template) => {
@@ -156,28 +211,53 @@ export default function NewAppPage() {
         )}
 
         {step === 1 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-4">Escolha um Template</label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {TEMPLATES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => selectTemplate(t)}
-                  className={`p-4 rounded-lg border-2 transition text-center ${
-                    templateId === t.id ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-400'
-                  }`}
-                >
-                  <div
-                    className="w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center text-2xl"
-                    style={{ backgroundColor: `${t.primaryColor}1A` }}
+          <div className="lg:grid lg:grid-cols-[1fr_260px] gap-8 items-start">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-4">
+                Escolha um Template
+              </label>
+              <p className="text-xs text-gray-400 mb-4 -mt-2">
+                Passe o mouse sobre um template pra ver a prévia ao lado antes de escolher.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {TEMPLATES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => selectTemplate(t)}
+                    onMouseEnter={() => setPreviewTemplateId(t.id)}
+                    onMouseLeave={() => setPreviewTemplateId('')}
+                    onFocus={() => setPreviewTemplateId(t.id)}
+                    className={`p-4 rounded-lg border-2 transition text-center ${
+                      templateId === t.id ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200 hover:border-indigo-400'
+                    }`}
                   >
-                    {t.icon}
-                  </div>
-                  <div className="font-medium text-sm text-gray-900">{t.name}</div>
-                  <div className="text-xs text-gray-500 mt-1">{t.inclui}</div>
-                </button>
-              ))}
+                    <div
+                      className="w-12 h-12 mx-auto mb-2 rounded-full flex items-center justify-center text-2xl"
+                      style={{ backgroundColor: `${t.primaryColor}1A` }}
+                    >
+                      {t.icon}
+                    </div>
+                    <div className="font-medium text-sm text-gray-900">{t.name}</div>
+                    <div className="text-xs text-gray-500 mt-1">{t.inclui}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="hidden lg:block sticky top-8">
+              <p className="text-xs text-gray-500 mb-2 text-center">
+                {previewedTemplate ? `Prévia: ${previewedTemplate.name}` : 'Prévia'}
+              </p>
+              <TemplatePhonePreview
+                platform={platform}
+                primaryColor={previewedTemplate?.primaryColor || '#4F46E5'}
+                secondaryColor={previewedTemplate?.secondaryColor || '#10B981'}
+                logoUrl={logoUrl}
+                appName={name}
+                template={previewedTemplate}
+                moduleByName={moduleByName}
+              />
             </div>
           </div>
         )}
@@ -213,28 +293,15 @@ export default function NewAppPage() {
           <div>
             <p className="text-sm font-medium text-gray-700 mb-4 text-center">Confira como seu app vai ficar</p>
             <PlatformToggle value={platform} onChange={setPlatform} />
-            <PhoneFrame platform={platform}>
-              <div className="h-10 flex items-center justify-between px-3 shrink-0" style={{ backgroundColor: primaryColor }}>
-                <span className="text-white text-lg leading-none">☰</span>
-                {logoUrl ? (
-                  <img src={logoUrl} alt={name} className="h-6 object-contain" />
-                ) : (
-                  <span className="text-white text-sm font-semibold truncate">{name || 'Meu App'}</span>
-                )}
-                <span className="w-4" />
-              </div>
-              <div className="p-4" style={{ borderTop: `2px solid ${secondaryColor}` }}>
-                <p className="text-xs text-gray-400 mb-3">Módulos incluídos no template "{template?.name}":</p>
-                <div className="space-y-2">
-                  {(template?.modules || []).map((name) => (
-                    <div key={name} className="flex items-center gap-2 text-sm text-gray-700 border-b border-gray-100 pb-2">
-                      <ModuleIcon moduleName={name} color={primaryColor} size={14} />
-                      {moduleByName.get(name)?.description || name}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </PhoneFrame>
+            <TemplatePhonePreview
+              platform={platform}
+              primaryColor={primaryColor}
+              secondaryColor={secondaryColor}
+              logoUrl={logoUrl}
+              appName={name}
+              template={template}
+              moduleByName={moduleByName}
+            />
           </div>
         )}
 
