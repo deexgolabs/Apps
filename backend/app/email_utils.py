@@ -25,20 +25,31 @@ def _send_smtp(to: str, subject: str, html_body: str) -> None:
     message["To"] = to
     message.set_content(html_body, subtype="html")
 
-    try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_SECONDS) as server:
-            server.starttls()
-            if settings.smtp_user:
-                server.login(settings.smtp_user, settings.smtp_password)
-            server.send_message(message)
-    except Exception:
-        logger.exception("Falha ao enviar e-mail para %s", to)
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=SMTP_TIMEOUT_SECONDS) as server:
+        server.starttls()
+        if settings.smtp_user:
+            server.login(settings.smtp_user, settings.smtp_password)
+        server.send_message(message)
+
+
+def send_email_now(to: str, subject: str, html_body: str) -> None:
+    """Envia (ou loga, sem SMTP configurado) um e-mail na hora, de forma
+    síncrona -- levanta exceção se o SMTP falhar. Usada pelo worker da fila
+    de background (app/jobs.py), que decide o retry; não deve ser chamada
+    direto de dentro de uma rota, pois pode bloquear até SMTP_TIMEOUT_SECONDS."""
+    if not settings.smtp_host:
+        print(f"\n--- E-MAIL (SMTP não configurado, apenas exibindo) ---\nPara: {to}\nAssunto: {subject}\n{html_body}\n---\n")
+        return
+    _send_smtp(to, subject, html_body)
 
 
 def send_email(to: str, subject: str, html_body: str) -> None:
     """Envia um e-mail via SMTP em background (thread separada, nunca bloqueia
-    quem chamou). Se SMTP não estiver configurado (.env vazio), apenas loga o
-    conteúdo na hora — útil em dev sem servidor de e-mail real."""
+    quem chamou, nunca propaga falha). Se SMTP não estiver configurado (.env
+    vazio), apenas loga o conteúdo na hora — útil em dev sem servidor de
+    e-mail real. Prefira enfileirar via app.jobs.enqueue_job(..., "email", ...)
+    pra ter retry de verdade; esta função continua existindo pros fluxos que
+    não passam pela fila (verificação de e-mail, redefinição de senha)."""
     if not settings.smtp_host:
         # print() em vez de logger.info(): sem handler configurado no root logger,
         # .info() é descartado silenciosamente (nível padrão é WARNING) — isso é
@@ -46,4 +57,10 @@ def send_email(to: str, subject: str, html_body: str) -> None:
         print(f"\n--- E-MAIL (SMTP não configurado, apenas exibindo) ---\nPara: {to}\nAssunto: {subject}\n{html_body}\n---\n")
         return
 
-    threading.Thread(target=_send_smtp, args=(to, subject, html_body), daemon=True).start()
+    def _run():
+        try:
+            _send_smtp(to, subject, html_body)
+        except Exception:
+            logger.exception("Falha ao enviar e-mail para %s", to)
+
+    threading.Thread(target=_run, daemon=True).start()

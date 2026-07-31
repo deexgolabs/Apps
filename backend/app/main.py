@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from pathlib import Path
 
 import sentry_sdk
@@ -73,6 +75,44 @@ app.include_router(audit_logs.router)
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+BACKGROUND_WORKER_INTERVAL_SECONDS = 15
+_worker_logger = logging.getLogger("app.jobs.worker")
+
+
+async def _background_job_worker() -> None:
+    """Processa a fila de background (e-mail/push/webhook) em loop, dentro do
+    próprio processo do backend -- ver app/jobs.py. Cada iteração abre sua
+    própria sessão de banco, isolada da requisição HTTP que a originou."""
+    from app.database import SessionLocal
+    from app.jobs import run_pending_jobs
+
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                run_pending_jobs(db)
+            finally:
+                db.close()
+        except Exception:
+            _worker_logger.exception("Erro no worker da fila de background")
+        await asyncio.sleep(BACKGROUND_WORKER_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def _start_background_worker() -> None:
+    app.state.background_worker_task = asyncio.create_task(_background_job_worker())
+
+
+@app.on_event("shutdown")
+async def _stop_background_worker() -> None:
+    task = getattr(app.state, "background_worker_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 @app.get("/")

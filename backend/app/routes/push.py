@@ -62,10 +62,14 @@ async def subscribe(
     return {"message": "Inscrito com sucesso"}
 
 
-def send_push_to_end_user(app_id: int, end_user_id: int, title: str, body: str, db: Session) -> None:
+def send_push_now(app_id: int, end_user_id: int, title: str, body: str, db: Session) -> None:
     """Push transacional (mudança de status de pedido) pro cliente final dono
-    da assinatura — best-effort, nunca levanta exceção, e não conta no limite
-    mensal de push do plano (isso é campanha, não notificação individual)."""
+    da assinatura -- não conta no limite mensal de push do plano (isso é
+    campanha, não notificação individual). Levanta exceção se alguma
+    assinatura falhar por erro transitório (rede, provedor fora do ar), pro
+    worker da fila de background (app/jobs.py) decidir o retry. Assinatura
+    expirada (410) é limpeza normal, não falha -- não faz sentido tentar de
+    novo pra um endpoint que não existe mais."""
     if not settings.vapid_private_key:
         return
     subscriptions = (
@@ -73,6 +77,7 @@ def send_push_to_end_user(app_id: int, end_user_id: int, title: str, body: str, 
         .filter(PushSubscription.app_id == app_id, PushSubscription.end_user_id == end_user_id)
         .all()
     )
+    transient_failure = False
     for sub in subscriptions:
         try:
             webpush(
@@ -90,7 +95,10 @@ def send_push_to_end_user(app_id: int, end_user_id: int, title: str, body: str, 
                 db.delete(sub)
             else:
                 logger.warning("Falha ao enviar push transacional para %s: %s", sub.endpoint, exc)
+                transient_failure = True
     db.commit()
+    if transient_failure:
+        raise RuntimeError(f"Falha transitória ao enviar push pro end_user {end_user_id} no app {app_id}")
 
 
 @router.post("/push/send")

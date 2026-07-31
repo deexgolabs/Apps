@@ -268,6 +268,25 @@ class OwnerAuditLog(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class BackgroundJob(Base):
+    """Fila de tarefas em background (e-mail, push, futuro webhook de saída)
+    persistida no Postgres -- processada por um worker assíncrono simples
+    dentro do próprio processo do backend, com retry/backoff exponencial em
+    caso de falha. Ver app/jobs.py."""
+    __tablename__ = "background_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    job_type = Column(String, nullable=False)  # "email" | "push" | "webhook"
+    payload = Column(JSON, nullable=False)
+    status = Column(String, nullable=False, default="pending")  # pending | done | failed
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=5)
+    next_attempt_at = Column(DateTime(timezone=True), default=utcnow)
+    last_error = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class ModuleItem(Base):
     __tablename__ = "module_items"
 

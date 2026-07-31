@@ -1,6 +1,5 @@
 import csv
 import io
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -12,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
-from app.email_utils import send_email
+from app.jobs import enqueue_job
 from app.models import App, AppConfig, AppUser, ItemVariation, LoyaltyAccount, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
 from app.payment_gateways import (
     checkout_mercado_pago,
@@ -24,7 +23,6 @@ from app.payment_gateways import (
 )
 from app.public_utils import get_published_app
 from app.routes.coupons import validate_coupon
-from app.routes.push import send_push_to_end_user
 from app.schemas import (
     CartCheckoutRequest,
     CloseTableRequest,
@@ -39,24 +37,20 @@ from app.utils import compute_frete, is_within_operating_hours, log_owner_action
 GATEWAY_MODULES = {"mercado_pago", "paypal", "pagseguro"}
 
 router = APIRouter(prefix="/api/apps/{app_id}", tags=["orders"])
-logger = logging.getLogger("app.orders")
 
 
 def _notify_owner_new_order(app: App, order: Order, db: Session) -> None:
     owner = db.query(User).filter(User.id == app.user_id).first()
     if not owner:
         return
-    try:
-        send_email(
-            to=owner.email,
-            subject=f"Novo pedido em {app.name}",
-            html_body=(
-                f"<p>Você recebeu um novo pedido pelo módulo <b>{order.module_name}</b> "
-                f"no app <b>{app.name}</b>.</p><p>Acesse o painel de Pedidos para ver os detalhes.</p>"
-            ),
-        )
-    except Exception:
-        logger.exception("Falha ao enviar e-mail de novo pedido para %s", owner.email)
+    enqueue_job(db, "email", {
+        "to": owner.email,
+        "subject": f"Novo pedido em {app.name}",
+        "html_body": (
+            f"<p>Você recebeu um novo pedido pelo módulo <b>{order.module_name}</b> "
+            f"no app <b>{app.name}</b>.</p><p>Acesse o painel de Pedidos para ver os detalhes.</p>"
+        ),
+    })
 
 
 def _record_status_event(order: Order, db: Session) -> None:
@@ -70,14 +64,11 @@ def _notify_owner_order_cancelled(app: App, order: Order, db: Session) -> None:
     owner = db.query(User).filter(User.id == app.user_id).first()
     if not owner:
         return
-    try:
-        send_email(
-            to=owner.email,
-            subject=f"Pedido cancelado pelo cliente em {app.name}",
-            html_body=f"<p>O cliente cancelou o pedido #{order.id} ({order.module_name}) antes do preparo.</p>",
-        )
-    except Exception:
-        logger.exception("Falha ao enviar e-mail de cancelamento para %s", owner.email)
+    enqueue_job(db, "email", {
+        "to": owner.email,
+        "subject": f"Pedido cancelado pelo cliente em {app.name}",
+        "html_body": f"<p>O cliente cancelou o pedido #{order.id} ({order.module_name}) antes do preparo.</p>",
+    })
 
 
 def _credit_loyalty_points(app_id: int, order: Order, db: Session) -> None:
@@ -441,25 +432,25 @@ async def list_orders(
 
 def _notify_customer_status_change(app: App, order: Order, db: Session) -> None:
     """Avisa o cliente final (se logado) que o status do pedido mudou —
-    e-mail + push dedicado, cada um best-effort e isolado, nunca conta no
-    limite mensal de push (é notificação individual, não campanha)."""
+    e-mail + push dedicado, cada um enfileirado na fila de background (com
+    retry próprio), nunca conta no limite mensal de push (é notificação
+    individual, não campanha)."""
     if not order.end_user_id:
         return
     label = ORDER_STATUS_LABELS.get(order.status, order.status)
     end_user = db.query(AppUser).filter(AppUser.id == order.end_user_id).first()
     if end_user:
-        try:
-            send_email(
-                to=end_user.email,
-                subject=f"Pedido atualizado: {label}",
-                html_body=f"<p>Seu pedido em <b>{app.name}</b> agora está: <b>{label}</b>.</p>",
-            )
-        except Exception:
-            logger.exception("Falha ao enviar e-mail de status pro cliente %s", end_user.email)
-    try:
-        send_push_to_end_user(app.id, order.end_user_id, f"Pedido {label}", f"Seu pedido em {app.name} agora está {label.lower()}.", db)
-    except Exception:
-        logger.exception("Falha ao enviar push de status pro end_user %s", order.end_user_id)
+        enqueue_job(db, "email", {
+            "to": end_user.email,
+            "subject": f"Pedido atualizado: {label}",
+            "html_body": f"<p>Seu pedido em <b>{app.name}</b> agora está: <b>{label}</b>.</p>",
+        })
+    enqueue_job(db, "push", {
+        "app_id": app.id,
+        "end_user_id": order.end_user_id,
+        "title": f"Pedido {label}",
+        "body": f"Seu pedido em {app.name} agora está {label.lower()}.",
+    })
 
 
 @router.put("/orders/close-table", response_model=List[OrderResponse])
