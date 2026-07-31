@@ -5,6 +5,7 @@ import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Order } from '@/types'
 import WhatsAppShareButton from '@/components/WhatsAppShareButton'
+import { printComanda } from '@/lib/printComanda'
 
 const STATUS_OPTIONS = [
   { value: 'pending', label: 'Pendente' },
@@ -14,7 +15,36 @@ const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelado' },
 ]
 
-export default function OrdersList({ appId, moduleName }: { appId: string; moduleName?: string }) {
+const FULFILLMENT_LABELS: Record<string, string> = {
+  pickup: 'Retirada no local',
+  delivery: 'Entrega',
+}
+
+function handlePrintOrder(appName: string, order: Order) {
+  const fulfillment =
+    order.fulfillment_type === 'dine_in'
+      ? `Mesa ${order.table_number || ''}`
+      : FULFILLMENT_LABELS[order.fulfillment_type || ''] || null
+
+  const dataLines = Object.entries(order.data)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n')
+
+  try {
+    printComanda({
+      appName,
+      title: `Pedido #${order.id}`,
+      subtitle: [fulfillment, order.coupon_code ? `Cupom: ${order.coupon_code}` : null].filter(Boolean).join(' · ') || undefined,
+      lines: order.items.map((oi) => ({ label: oi.name, qty: oi.quantity, unitPrice: oi.unit_price, total: oi.subtotal })),
+      total: order.amount || 0,
+      footer: dataLines || undefined,
+    })
+  } catch {
+    toast.error('Habilite pop-ups pra imprimir a comanda')
+  }
+}
+
+export default function OrdersList({ appId, appName, moduleName }: { appId: string; appName?: string; moduleName?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -116,8 +146,15 @@ export default function OrdersList({ appId, moduleName }: { appId: string; modul
               <span className="font-medium">{key}:</span> {String(value)}
             </p>
           ))}
-          <div className="pt-1 border-t border-gray-100">
+          <div className="pt-1 border-t border-gray-100 flex items-center gap-2">
             <WhatsAppShareButton order={order} />
+            <button
+              type="button"
+              onClick={() => handlePrintOrder(appName || 'Loja', order)}
+              className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+            >
+              🖨️ Imprimir comanda
+            </button>
           </div>
         </div>
       ))}

@@ -4,8 +4,28 @@ import { useEffect, useState } from 'react'
 import api from '@/lib/api'
 import toast from 'react-hot-toast'
 import type { Order } from '@/types'
+import { printComanda } from '@/lib/printComanda'
 
-export default function OpenTablesPanel({ appId }: { appId: string }) {
+function handlePrintTable(appName: string, tableNumber: string, tableOrders: Order[]) {
+  const lines = tableOrders.flatMap((o) =>
+    o.items.map((oi) => ({ label: oi.name, qty: oi.quantity, unitPrice: oi.unit_price, total: oi.subtotal }))
+  )
+  const total = tableOrders.reduce((sum, o) => sum + (o.amount || 0), 0)
+
+  try {
+    printComanda({
+      appName,
+      title: `Mesa ${tableNumber}`,
+      subtitle: `${tableOrders.length} pedido(s)`,
+      lines,
+      total,
+    })
+  } catch {
+    toast.error('Habilite pop-ups pra imprimir a comanda')
+  }
+}
+
+export default function OpenTablesPanel({ appId, appName }: { appId: string; appName?: string }) {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
   const [closingTable, setClosingTable] = useState<string | null>(null)
@@ -59,14 +79,23 @@ export default function OpenTablesPanel({ appId }: { appId: string }) {
           <div key={tableNumber} className="border border-gray-200 rounded-lg p-3 space-y-2">
             <div className="flex items-center justify-between">
               <p className="font-medium text-gray-900">Mesa {tableNumber}</p>
-              <button
-                type="button"
-                onClick={() => handleCloseTable(tableNumber)}
-                disabled={closingTable === tableNumber}
-                className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {closingTable === tableNumber ? 'Fechando...' : 'Fechar comanda'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handlePrintTable(appName || 'Loja', tableNumber, tableOrders)}
+                  className="text-xs text-gray-600 border border-gray-300 rounded px-2 py-1 hover:bg-gray-50"
+                >
+                  🖨️ Imprimir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleCloseTable(tableNumber)}
+                  disabled={closingTable === tableNumber}
+                  className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {closingTable === tableNumber ? 'Fechando...' : 'Fechar comanda'}
+                </button>
+              </div>
             </div>
             <div className="text-xs text-gray-600 space-y-1">
               {tableOrders.map((o) => (

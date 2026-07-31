@@ -580,8 +580,8 @@ export default function AppEditorPage({ params }: PageProps) {
               <div className="space-y-4">
                 <CouponsManager appId={id} />
                 <WebhooksManager appId={id} />
-                <OpenTablesPanel appId={id} />
-                <OrdersList appId={id} />
+                <OpenTablesPanel appId={id} appName={name} />
+                <OrdersList appId={id} appName={name} />
               </div>
             )}
 
