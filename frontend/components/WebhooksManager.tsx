@@ -44,8 +44,8 @@ export default function WebhooksManager({ appId }: { appId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId])
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCreate = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!url.trim()) return
     try {
       const res = await api.post(`/api/apps/${appId}/webhooks/subscriptions`, { url, event })
@@ -102,7 +102,11 @@ export default function WebhooksManager({ appId }: { appId: string }) {
             <p className="text-sm text-gray-500">Carregando...</p>
           ) : (
             <>
-              <form onSubmit={handleCreate} className="space-y-2">
+              {/* Não usa <form> aqui de propósito: este painel renderiza dentro do
+                  <form> maior da página (aba "Pedidos" faz parte do form de salvar
+                  o app inteiro) — um <form> aninhado faz o clique disparar o submit
+                  do form de fora em vez deste, então o botão é type="button" + onClick. */}
+              <div className="space-y-2">
                 <input
                   type="url"
                   value={url}
@@ -120,12 +124,13 @@ export default function WebhooksManager({ appId }: { appId: string }) {
                   ))}
                 </select>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => handleCreate()}
                   className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700"
                 >
                   + Adicionar webhook
                 </button>
-              </form>
+              </div>
 
               <div className="space-y-1.5">
                 {webhooks.length === 0 ? (

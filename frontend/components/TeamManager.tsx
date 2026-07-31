@@ -43,8 +43,8 @@ export default function TeamManager({ appId, isOwner }: { appId: string; isOwner
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId])
 
-  const handleInvite = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleInvite = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!email.trim()) return
     setInviting(true)
     try {
@@ -92,11 +92,22 @@ export default function TeamManager({ appId, isOwner }: { appId: string; isOwner
       </div>
 
       {isOwner && (
-        <form onSubmit={handleInvite} className="flex flex-col sm:flex-row gap-2">
+        // Nota: TeamManager é renderizado dentro do <form> principal do editor
+        // de app (aba "Equipe" em app/dashboard/apps/[id]/page.tsx) -- por isso
+        // aqui é uma div com onClick, não um <form> aninhado. Um <form> dentro
+        // de outro pode disparar submissão nativa do form externo em vez do
+        // onSubmit do React, recarregando a página inteira.
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleInvite()
+              }
+            }}
             placeholder="e-mail da pessoa (precisa já ter uma conta)"
             className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg"
           />
@@ -109,13 +120,14 @@ export default function TeamManager({ appId, isOwner }: { appId: string; isOwner
             <option value="viewer">Visualizador</option>
           </select>
           <button
-            type="submit"
+            type="button"
+            onClick={() => handleInvite()}
             disabled={inviting}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50"
           >
             {inviting ? 'Convidando...' : '+ Convidar'}
           </button>
-        </form>
+        </div>
       )}
 
       {loading ? (

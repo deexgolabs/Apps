@@ -41,8 +41,8 @@ export default function CouponsManager({ appId }: { appId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId])
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCreate = async (e?: React.FormEvent) => {
+    e?.preventDefault()
     if (!code.trim() || !discountValue.trim()) return
     try {
       const res = await api.post(`/api/apps/${appId}/coupons`, {
@@ -97,7 +97,11 @@ export default function CouponsManager({ appId }: { appId: string }) {
             <p className="text-sm text-gray-500">Carregando...</p>
           ) : (
             <>
-              <form onSubmit={handleCreate} className="space-y-2">
+              {/* Não usa <form> aqui de propósito: este painel renderiza dentro do
+                  <form> maior da página (aba "Pedidos" faz parte do form de salvar
+                  o app inteiro) — um <form> aninhado faz o clique disparar o submit
+                  do form de fora em vez deste, então o botão é type="button" + onClick. */}
+              <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <input
                     type="text"
@@ -142,12 +146,13 @@ export default function CouponsManager({ appId }: { appId: string }) {
                   />
                 </div>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={() => handleCreate()}
                   className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700"
                 >
                   + Criar cupom
                 </button>
-              </form>
+              </div>
 
               <div className="space-y-1.5">
                 {coupons.length === 0 ? (
