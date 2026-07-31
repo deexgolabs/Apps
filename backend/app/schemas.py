@@ -12,6 +12,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    referral_code: Optional[str] = None
 
 
 class UserLogin(BaseModel):
@@ -30,6 +31,7 @@ class UserResponse(UserBase):
     is_active: bool
     is_verified: bool
     is_admin: bool
+    bonus_app_slots: int
     created_at: datetime
 
     class Config:
@@ -38,6 +40,24 @@ class UserResponse(UserBase):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+
+class ReferredUser(BaseModel):
+    full_name: str
+    is_verified: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ReferralsResponse(BaseModel):
+    referral_code: str
+    referral_link: str
+    bonus_app_slots: int
+    referred_count: int
+    activated_count: int
+    referred: List[ReferredUser]
 
 
 class ResetPasswordRequest(BaseModel):

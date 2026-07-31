@@ -22,6 +22,10 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     is_admin = Column(Boolean, default=False)
+    referral_code = Column(String, unique=True, index=True, nullable=True)
+    referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    bonus_app_slots = Column(Integer, default=0, nullable=False)
+    referral_reward_granted = Column(Boolean, default=False, nullable=False)
 
 
 class App(Base):

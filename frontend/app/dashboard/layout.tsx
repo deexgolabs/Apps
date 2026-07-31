@@ -53,6 +53,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link href="/dashboard/billing" className="text-gray-600 hover:text-gray-900 text-sm">
               Meu plano
             </Link>
+            <Link href="/dashboard/referrals" className="text-gray-600 hover:text-gray-900 text-sm">
+              Indicações
+            </Link>
             {user.is_admin && (
               <Link href="/dashboard/admin" className="text-gray-600 hover:text-gray-900 text-sm">
                 Admin

@@ -10,6 +10,7 @@ interface RegisterData {
   email: string
   password: string
   full_name: string
+  referral_code?: string
 }
 
 export const authService = {

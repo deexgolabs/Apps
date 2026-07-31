@@ -44,11 +44,16 @@ async def register(request: Request, user_data: UserCreate, db: Session = Depend
             detail="Email already registered"
         )
 
+    referrer = None
+    if user_data.referral_code:
+        referrer = db.query(User).filter(User.referral_code == user_data.referral_code).first()
+
     db_user = User(
         email=user_data.email,
         full_name=user_data.full_name,
         password_hash=hash_password(user_data.password),
-        plan="free"
+        plan="free",
+        referred_by_id=referrer.id if referrer else None,
     )
     db.add(db_user)
     db.commit()
@@ -138,6 +143,13 @@ async def verify_email(token: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado")
 
     user.is_verified = True
+
+    if user.referred_by_id and not user.referral_reward_granted:
+        referrer = db.query(User).filter(User.id == user.referred_by_id).first()
+        if referrer:
+            referrer.bonus_app_slots = (referrer.bonus_app_slots or 0) + 1
+            user.referral_reward_granted = True
+
     db.commit()
 
     return {"message": "E-mail verificado com sucesso."}

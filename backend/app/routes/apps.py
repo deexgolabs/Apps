@@ -59,6 +59,7 @@ async def create_app(
     """Cria novo app, respeitando o limite de apps do plano do usuário"""
     limit = get_plan_limits(current_user.plan, db)["apps"]
     if limit is not None:
+        limit += current_user.bonus_app_slots
         current_count = db.query(App).filter(App.user_id == current_user.id).count()
         if current_count >= limit:
             raise HTTPException(
@@ -105,6 +106,7 @@ async def duplicate_app(
 
     limit = get_plan_limits(current_user.plan, db)["apps"]
     if limit is not None:
+        limit += current_user.bonus_app_slots
         current_count = db.query(App).filter(App.user_id == current_user.id).count()
         if current_count >= limit:
             raise HTTPException(

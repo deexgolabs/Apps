@@ -6,7 +6,23 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   is_admin: boolean
+  bonus_app_slots: number
   created_at: string
+}
+
+export interface ReferredUser {
+  full_name: string
+  is_verified: boolean
+  created_at: string
+}
+
+export interface ReferralsInfo {
+  referral_code: string
+  referral_link: string
+  bonus_app_slots: number
+  referred_count: number
+  activated_count: number
+  referred: ReferredUser[]
 }
 
 export interface App {
