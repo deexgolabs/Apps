@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import App, ItemVariation, ModuleItem, User
 from app.schemas import VariationCreate, VariationResponse, VariationUpdate
 from app.dependencies import get_current_user
+from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps", tags=["item-variations"])
 
@@ -69,6 +70,7 @@ async def create_variation(
     db.add(variation)
     db.commit()
     db.refresh(variation)
+    invalidate_public_cache(app_id)
     return variation
 
 
@@ -97,6 +99,7 @@ async def update_variation(
 
     db.commit()
     db.refresh(variation)
+    invalidate_public_cache(app_id)
     return variation
 
 
@@ -121,4 +124,5 @@ async def delete_variation(
 
     db.delete(variation)
     db.commit()
+    invalidate_public_cache(app_id)
     return None

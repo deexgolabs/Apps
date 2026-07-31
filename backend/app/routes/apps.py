@@ -10,6 +10,7 @@ from app.dependencies import get_current_user
 from app.constants import APP_TEMPLATES
 from app.plan_limits import get_plan_limits
 from app.utils import delete_app_cascade, log_owner_action
+from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 
@@ -240,6 +241,7 @@ async def update_app(
 
     db.commit()
     db.refresh(app)
+    invalidate_public_cache(app.id)
 
     if touches_content:
         changed_fields = [
@@ -310,6 +312,7 @@ async def restore_app_version(
 
     db.commit()
     db.refresh(app)
+    invalidate_public_cache(app.id)
     log_owner_action(
         db, current_user.id, "restore_version", f"app:{app.id}:{app.name}",
         app_id=app.id, details=f"version_id: {version_id}",
@@ -338,5 +341,6 @@ async def delete_app(
     app_name = app.name
     delete_app_cascade(db, app_id)
     db.commit()
+    invalidate_public_cache(app_id)
     log_owner_action(db, current_user.id, "delete_app", f"app:{app_id}:{app_name}")
     return None

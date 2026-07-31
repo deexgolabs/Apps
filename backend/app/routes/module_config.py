@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import App, AppConfig, Module, User
 from app.schemas import ModuleConfigResponse, ModuleConfigUpdate
 from app.dependencies import get_current_user
+from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps", tags=["module-config"])
 
@@ -85,4 +86,5 @@ async def update_module_config(
 
     db.commit()
     db.refresh(app_config)
+    invalidate_public_cache(app_id)
     return {"settings": app_config.settings}

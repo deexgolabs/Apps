@@ -11,6 +11,7 @@ from app.schemas import CategoryCreate, CategoryResponse, ImportSummaryResponse,
 from app.dependencies import get_current_user
 from app.plan_limits import get_plan_limits
 from app.item_utils import attach_rating_aggregates
+from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps", tags=["module-items"])
 
@@ -63,6 +64,7 @@ async def create_category(
     db.add(category)
     db.commit()
     db.refresh(category)
+    invalidate_public_cache(app_id)
     return category
 
 
@@ -86,6 +88,7 @@ async def delete_category(
     db.query(ModuleItem).filter(ModuleItem.category_id == category_id).update({"category_id": None})
     db.delete(category)
     db.commit()
+    invalidate_public_cache(app_id)
     return None
 
 
@@ -136,6 +139,7 @@ async def create_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+    invalidate_public_cache(app_id)
     return item
 
 
@@ -247,6 +251,8 @@ async def import_items_csv(
         created += 1
 
     db.commit()
+    if created:
+        invalidate_public_cache(app_id)
 
     message = None
     if skipped:
@@ -277,6 +283,7 @@ async def update_item(
 
     db.commit()
     db.refresh(item)
+    invalidate_public_cache(app_id)
     return item
 
 
@@ -299,4 +306,5 @@ async def delete_item(
 
     db.delete(item)
     db.commit()
+    invalidate_public_cache(app_id)
     return None

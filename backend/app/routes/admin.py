@@ -12,6 +12,7 @@ from app.models import (
     User,
 )
 from app.utils import delete_app_cascade
+from app.cache import invalidate_public_cache
 from app.schemas import (
     AdminAppDetailResponse,
     AdminAppResponse,
@@ -182,6 +183,7 @@ async def update_app_status(
     app.status = payload.status
     db.commit()
     db.refresh(app)
+    invalidate_public_cache(app.id)
 
     _log_audit(db, admin, "update_app_status", f"app:{app.id}:{app.name}", f"status: {old_status} -> {payload.status}")
 
@@ -210,6 +212,7 @@ async def delete_app(
     app_name = app.name
     delete_app_cascade(db, app_id)
     db.commit()
+    invalidate_public_cache(app_id)
 
     _log_audit(db, admin, "delete_app", f"app:{app_id}:{app_name}")
     return None

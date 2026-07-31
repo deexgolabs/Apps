@@ -8,6 +8,7 @@ from app.dependencies import get_current_end_user
 from app.models import AppUser, ItemReview, ModuleItem
 from app.public_utils import get_published_app
 from app.schemas import ReviewCreate, ReviewResponse
+from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps/{app_id}", tags=["reviews"])
 
@@ -85,4 +86,5 @@ async def create_or_update_review(
 
     db.commit()
     db.refresh(review)
+    invalidate_public_cache(app_id)
     return _serialize_review(review, end_user.full_name)
