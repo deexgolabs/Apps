@@ -81,6 +81,9 @@ async def update_user(
         if payload.plan != user.plan:
             changes.append(f"plan: {user.plan} -> {payload.plan}")
         user.plan = payload.plan
+        # concessão manual do admin não expira sozinha (evita reverter pra
+        # free por causa de um plan_expires_at antigo de uma assinatura paga anterior)
+        user.plan_expires_at = None
     if payload.is_admin is not None:
         if payload.is_admin != user.is_admin:
             changes.append(f"is_admin: {user.is_admin} -> {payload.is_admin}")

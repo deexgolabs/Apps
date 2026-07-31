@@ -49,6 +49,35 @@ def test_admin_can_update_another_users_plan(client, register_user, db_session):
     assert response.json()["plan"] == "business"
 
 
+def test_admin_plan_grant_clears_old_expiration(client, register_user, db_session):
+    """Concessão manual do admin não deve expirar sozinha por causa de um
+    plan_expires_at deixado por uma assinatura paga anterior."""
+    from datetime import timedelta
+    from app.models import utcnow
+
+    admin_data = register_user(email="admin3@example.com")
+    target_data = register_user(email="target2@example.com")
+
+    admin_user = db_session.query(User).filter(User.email == "admin3@example.com").first()
+    admin_user.is_admin = True
+    db_session.commit()
+
+    target_user = db_session.query(User).filter(User.email == "target2@example.com").first()
+    target_user.plan_expires_at = utcnow() - timedelta(days=1)
+    db_session.commit()
+
+    headers = {"Authorization": f"Bearer {admin_data['access_token']}"}
+    target_id = target_data["user"]["id"]
+
+    response = client.put(f"/api/admin/users/{target_id}", json={"plan": "business"}, headers=headers)
+    assert response.status_code == 200
+
+    target_headers = {"Authorization": f"Bearer {target_data['access_token']}"}
+    me = client.get("/api/users/me", headers=target_headers)
+    assert me.json()["plan"] == "business"
+    assert me.json()["plan_expires_at"] is None
+
+
 def test_admin_can_list_and_edit_plans(client, register_user, db_session):
     headers = _make_admin(client, register_user, db_session, "planadmin@example.com")
 

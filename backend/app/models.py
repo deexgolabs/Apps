@@ -26,6 +26,7 @@ class User(Base):
     referred_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     bonus_app_slots = Column(Integer, default=0, nullable=False)
     referral_reward_granted = Column(Boolean, default=False, nullable=False)
+    plan_expires_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class App(Base):

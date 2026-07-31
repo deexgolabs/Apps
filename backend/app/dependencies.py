@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.models import utcnow
 from app.utils import verify_token, decode_token
 from app.models import User, AppUser
 
@@ -31,6 +32,12 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
+
+    if user.plan != "free" and user.plan_expires_at and user.plan_expires_at < utcnow():
+        user.plan = "free"
+        user.plan_expires_at = None
+        db.commit()
+        db.refresh(user)
 
     return user
 

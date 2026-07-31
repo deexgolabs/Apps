@@ -28,6 +28,7 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     id: int
     plan: str
+    plan_expires_at: Optional[datetime] = None
     is_active: bool
     is_verified: bool
     is_admin: bool

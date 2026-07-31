@@ -19,7 +19,7 @@ const GATEWAYS = [
   { id: 'pagseguro', label: 'PagSeguro' },
 ]
 
-function BillingReturnHandler({ onConfirmed }: { onConfirmed: (plan: string) => void }) {
+function BillingReturnHandler({ onConfirmed }: { onConfirmed: (plan: string, expiresAt: string | null) => void }) {
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -27,9 +27,9 @@ function BillingReturnHandler({ onConfirmed }: { onConfirmed: (plan: string) => 
     const status = searchParams.get('status')
     if (plan && status === 'success') {
       api.post('/api/billing/confirm', { plan })
-        .then(() => {
+        .then((response) => {
           toast.success(`Plano atualizado para ${plan}`)
-          onConfirmed(plan)
+          onConfirmed(plan, response.data.plan_expires_at || null)
         })
         .catch(() => toast.error('Erro ao confirmar upgrade'))
     }
@@ -55,8 +55,8 @@ export default function BillingPage() {
     }
   }
 
-  const handleConfirmed = (plan: string) => {
-    if (user) setUser({ ...user, plan: plan as any })
+  const handleConfirmed = (plan: string, expiresAt: string | null) => {
+    if (user) setUser({ ...user, plan: plan as any, plan_expires_at: expiresAt })
   }
 
   return (
@@ -72,6 +72,10 @@ export default function BillingPage() {
             ← Voltar
           </Link>
         </div>
+
+        <p className="text-sm text-gray-500">
+          Planos pagos duram 30 dias. Renove antes do vencimento pra não voltar pro plano Free automaticamente.
+        </p>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map((plan) => {
@@ -92,10 +96,19 @@ export default function BillingPage() {
                   <li>{plan.categories} categorias</li>
                 </ul>
 
-                {isCurrent ? (
-                  <span className="block text-center text-sm font-semibold text-indigo-600">Plano atual</span>
-                ) : plan.id === 'free' ? (
-                  <span className="block text-center text-sm text-gray-400">—</span>
+                {isCurrent && (
+                  <p className="text-center text-sm font-semibold text-indigo-600 mb-3">
+                    Plano atual
+                    {plan.id !== 'free' && user?.plan_expires_at && (
+                      <span className="block text-xs font-normal text-gray-500 mt-1">
+                        Renova até {new Date(user.plan_expires_at).toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
+                  </p>
+                )}
+
+                {plan.id === 'free' ? (
+                  !isCurrent && <span className="block text-center text-sm text-gray-400">—</span>
                 ) : (
                   <div className="space-y-2">
                     {GATEWAYS.map((gw) => (
@@ -106,7 +119,11 @@ export default function BillingPage() {
                         disabled={loadingGateway === `${plan.id}-${gw.id}`}
                         className="w-full text-sm border border-gray-300 rounded-lg py-2 hover:bg-gray-50 disabled:opacity-50 transition"
                       >
-                        {loadingGateway === `${plan.id}-${gw.id}` ? 'Aguarde...' : `Assinar via ${gw.label}`}
+                        {loadingGateway === `${plan.id}-${gw.id}`
+                          ? 'Aguarde...'
+                          : isCurrent
+                            ? `Renovar via ${gw.label}`
+                            : `Assinar via ${gw.label}`}
                       </button>
                     ))}
                   </div>

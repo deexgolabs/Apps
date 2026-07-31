@@ -3,6 +3,7 @@ export interface User {
   email: string
   full_name: string
   plan: 'free' | 'pro' | 'business'
+  plan_expires_at: string | null
   is_active: boolean
   is_verified: boolean
   is_admin: boolean
