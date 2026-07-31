@@ -110,8 +110,8 @@ def test_webhook_job_posts_to_url(db_session, monkeypatch):
         def raise_for_status(self):
             pass
 
-    def _fake_post(url, json, timeout):
-        calls.append((url, json, timeout))
+    def _fake_post(url, json, headers, timeout):
+        calls.append((url, json, headers, timeout))
         return _FakeResponse()
 
     monkeypatch.setattr("httpx.post", _fake_post)
@@ -119,7 +119,7 @@ def test_webhook_job_posts_to_url(db_session, monkeypatch):
     job = enqueue_job(db_session, "webhook", {"url": "https://example.com/hook", "body": {"event": "test"}})
     run_pending_jobs(db_session)
 
-    assert calls == [("https://example.com/hook", {"event": "test"}, 10.0)]
+    assert calls == [("https://example.com/hook", {"event": "test"}, {}, 10.0)]
     db_session.refresh(job)
     assert job.status == "done"
 

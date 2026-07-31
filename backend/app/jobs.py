@@ -39,7 +39,12 @@ def _execute(job: BackgroundJob, db: Session) -> None:
         send_push_now(job.payload["app_id"], job.payload["end_user_id"], job.payload["title"], job.payload["body"], db)
     elif job.job_type == "webhook":
         import httpx
-        response = httpx.post(job.payload["url"], json=job.payload["body"], timeout=10.0)
+        response = httpx.post(
+            job.payload["url"],
+            json=job.payload["body"],
+            headers=job.payload.get("headers") or {},
+            timeout=10.0,
+        )
         response.raise_for_status()
     else:
         raise ValueError(f"Tipo de job desconhecido: {job.job_type}")

@@ -287,6 +287,22 @@ class BackgroundJob(Base):
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class WebhookSubscription(Base):
+    """Webhook de saída configurado pelo próprio dono do app -- quando um
+    evento assinado acontece (novo pedido, mudança de status), o backend
+    dispara um POST assinado (HMAC-SHA256 com `secret`) pra `url`, via fila de
+    background (job_type='webhook'), com retry automático em caso de falha."""
+    __tablename__ = "webhook_subscriptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    url = Column(String, nullable=False)
+    event = Column(String, nullable=False)  # "order.created" | "order.status_changed" | "*"
+    secret = Column(String, nullable=False)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class ModuleItem(Base):
     __tablename__ = "module_items"
 

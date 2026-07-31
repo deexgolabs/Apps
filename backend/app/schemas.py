@@ -525,6 +525,30 @@ class CouponResponse(BaseModel):
         from_attributes = True
 
 
+class WebhookSubscriptionCreate(BaseModel):
+    url: str
+    event: str  # "order.created" | "order.status_changed" | "*"
+
+
+class WebhookSubscriptionUpdate(BaseModel):
+    url: Optional[str] = None
+    event: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class WebhookSubscriptionResponse(BaseModel):
+    id: int
+    app_id: int
+    url: str
+    event: str
+    secret: str
+    active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class CouponValidateRequest(BaseModel):
     code: str
     subtotal: float

@@ -1,15 +1,132 @@
 import logging
-from typing import Optional
+import secrets
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import App, Order
+from app.dependencies import get_current_user
+from app.models import App, Order, User, WebhookSubscription
 from app.routes.orders import GATEWAY_MODULES, _get_module_settings, _mark_order_confirmed, _verify_gateway_payment
+from app.schemas import WebhookSubscriptionCreate, WebhookSubscriptionResponse, WebhookSubscriptionUpdate
+from app.webhook_dispatch import VALID_EVENTS
 
 router = APIRouter(prefix="/api/apps/{app_id}/webhooks", tags=["webhooks"])
 logger = logging.getLogger("app.webhooks")
+
+MAX_WEBHOOKS_PER_APP = 5
+
+
+def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
+    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
+    if not app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    return app
+
+
+@router.get("/subscriptions", response_model=List[WebhookSubscriptionResponse])
+async def list_webhook_subscriptions(
+    app_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_app(app_id, db, current_user)
+    return (
+        db.query(WebhookSubscription)
+        .filter(WebhookSubscription.app_id == app_id)
+        .order_by(WebhookSubscription.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/subscriptions", response_model=WebhookSubscriptionResponse, status_code=status.HTTP_201_CREATED)
+async def create_webhook_subscription(
+    app_id: int,
+    payload: WebhookSubscriptionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Cria um webhook de saída pro app -- o `secret` retornado é usado pra
+    assinar (HMAC-SHA256, header X-Webhook-Signature) todo POST enviado pra
+    `url`, e só é mostrado por completo aqui na criação."""
+    _get_owned_app(app_id, db, current_user)
+
+    if payload.event not in VALID_EVENTS and payload.event != "*":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Evento inválido. Use um de: {', '.join(sorted(VALID_EVENTS))}, ou '*' para todos.",
+        )
+    if not payload.url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL inválida")
+
+    current_count = db.query(WebhookSubscription).filter(WebhookSubscription.app_id == app_id).count()
+    if current_count >= MAX_WEBHOOKS_PER_APP:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Limite de {MAX_WEBHOOKS_PER_APP} webhook(s) por app atingido.",
+        )
+
+    subscription = WebhookSubscription(
+        app_id=app_id,
+        url=payload.url,
+        event=payload.event,
+        secret=secrets.token_hex(24),
+    )
+    db.add(subscription)
+    db.commit()
+    db.refresh(subscription)
+    return subscription
+
+
+@router.put("/subscriptions/{subscription_id}", response_model=WebhookSubscriptionResponse)
+async def update_webhook_subscription(
+    app_id: int,
+    subscription_id: int,
+    payload: WebhookSubscriptionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_app(app_id, db, current_user)
+    subscription = db.query(WebhookSubscription).filter(
+        WebhookSubscription.id == subscription_id, WebhookSubscription.app_id == app_id
+    ).first()
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+    if payload.event is not None and payload.event not in VALID_EVENTS and payload.event != "*":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Evento inválido. Use um de: {', '.join(sorted(VALID_EVENTS))}, ou '*' para todos.",
+        )
+    if payload.url is not None and not payload.url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="URL inválida")
+
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(subscription, field, value)
+
+    db.commit()
+    db.refresh(subscription)
+    return subscription
+
+
+@router.delete("/subscriptions/{subscription_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_webhook_subscription(
+    app_id: int,
+    subscription_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_app(app_id, db, current_user)
+    subscription = db.query(WebhookSubscription).filter(
+        WebhookSubscription.id == subscription_id, WebhookSubscription.app_id == app_id
+    ).first()
+    if not subscription:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found")
+
+    db.delete(subscription)
+    db.commit()
+    return None
 
 
 @router.post("/{gateway}")

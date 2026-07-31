@@ -18,6 +18,7 @@ import GuidedTour from '@/components/GuidedTour'
 import ImportFromUrlPanel from '@/components/ImportFromUrlPanel'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
+import WebhooksManager from '@/components/WebhooksManager'
 import SalesReport from '@/components/SalesReport'
 import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
@@ -567,6 +568,7 @@ export default function AppEditorPage({ params }: PageProps) {
             {activeTab === 'pedidos' && (
               <div className="space-y-4">
                 <CouponsManager appId={id} />
+                <WebhooksManager appId={id} />
                 <OpenTablesPanel appId={id} />
                 <OrdersList appId={id} />
               </div>

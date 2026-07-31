@@ -12,6 +12,7 @@ from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.jobs import enqueue_job
+from app.webhook_dispatch import dispatch_webhook_event
 from app.models import App, AppConfig, AppUser, ItemVariation, LoyaltyAccount, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
 from app.payment_gateways import (
     checkout_mercado_pago,
@@ -51,6 +52,16 @@ def _notify_owner_new_order(app: App, order: Order, db: Session) -> None:
             f"no app <b>{app.name}</b>.</p><p>Acesse o painel de Pedidos para ver os detalhes.</p>"
         ),
     })
+
+
+def _order_event_payload(order: Order) -> dict:
+    return {
+        "order_id": order.id,
+        "app_id": order.app_id,
+        "module_name": order.module_name,
+        "status": order.status,
+        "amount": order.amount,
+    }
 
 
 def _record_status_event(order: Order, db: Session) -> None:
@@ -150,6 +161,7 @@ def _mark_order_confirmed(order: Order, app: App, db: Session) -> None:
     db.commit()
     db.refresh(order)
     _notify_customer_status_change(app, order, db)
+    dispatch_webhook_event(db, order.app_id, "order.status_changed", _order_event_payload(order))
 
 
 async def _verify_gateway_payment(gateway: str, settings: dict, payment_reference: str) -> bool:
@@ -191,6 +203,7 @@ async def create_order(
     db.refresh(order)
 
     _notify_owner_new_order(app, order, db)
+    dispatch_webhook_event(db, app_id, "order.created", _order_event_payload(order))
 
     return order
 
@@ -370,6 +383,7 @@ async def create_cart_checkout(
     db.refresh(order)
 
     _notify_owner_new_order(app, order, db)
+    dispatch_webhook_event(db, app_id, "order.created", _order_event_payload(order))
 
     checkout_url = None
     if payload.gateway:
@@ -490,6 +504,7 @@ async def close_table(
         db.refresh(order)
         _credit_loyalty_points(app_id, order, db)
         _notify_customer_status_change(app, order, db)
+        dispatch_webhook_event(db, app_id, "order.status_changed", _order_event_payload(order))
 
     return orders
 
@@ -528,6 +543,7 @@ async def update_order(
         )
 
     _notify_customer_status_change(app, order, db)
+    dispatch_webhook_event(db, app_id, "order.status_changed", _order_event_payload(order))
     return order
 
 
@@ -606,6 +622,7 @@ async def cancel_my_order(
     db.refresh(order)
 
     _notify_owner_order_cancelled(app, order, db)
+    dispatch_webhook_event(db, app_id, "order.status_changed", _order_event_payload(order))
     return order
 
 
