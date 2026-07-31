@@ -23,6 +23,7 @@ async def get_public_app(app_id: int, db: Session = Depends(get_db)):
     result = {
         "id": app.id,
         "name": app.name,
+        "description": app.description,
         "config": app.config,
         "modules": app.modules,
     }

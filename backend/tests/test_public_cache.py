@@ -15,6 +15,21 @@ def _published_app(client, register_user, email):
     return app_id, headers
 
 
+def test_public_app_includes_description(client, register_user):
+    data = register_user(email="cache_desc@example.com")
+    headers = _auth_headers(data)
+    create = client.post(
+        "/api/apps/",
+        json={"name": "App Com Descrição", "description": "Comida boa e rápida", "template_type": "other"},
+        headers=headers,
+    )
+    app_id = create.json()["id"]
+    client.put(f"/api/apps/{app_id}", json={"status": "published"}, headers=headers)
+
+    response = client.get(f"/api/apps/{app_id}/public")
+    assert response.json()["description"] == "Comida boa e rápida"
+
+
 def test_public_app_reflects_update_after_cache_invalidation(client, register_user):
     app_id, headers = _published_app(client, register_user, "cache1@example.com")
 
