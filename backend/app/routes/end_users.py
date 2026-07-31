@@ -5,9 +5,12 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.config import settings
 from app.database import get_db
-from app.models import App, AppUser, User
+from app.models import App, AppUser, ItemReview, LoyaltyAccount, ModuleItem, Order, PushSubscription, User, WishlistItem, utcnow
 from app.rate_limit import limiter
-from app.schemas import EndUserCreate, EndUserLogin, EndUserProfileUpdate, EndUserResponse, EndUserToken
+from app.schemas import (
+    EndUserCreate, EndUserDataExport, EndUserLogin, EndUserProfileUpdate, EndUserResponse, EndUserToken,
+    OrderResponse, ReviewResponse, WishlistItemResponse,
+)
 from app.utils import hash_password, verify_password, create_access_token
 from app.dependencies import get_current_user, get_current_end_user
 
@@ -155,6 +158,88 @@ async def update_current_end_user_profile(
     db.commit()
     db.refresh(end_user)
     return end_user
+
+
+@router.get("/me/export", response_model=EndUserDataExport)
+async def export_my_data(
+    app_id: int,
+    db: Session = Depends(get_db),
+    end_user: AppUser = Depends(get_current_end_user),
+):
+    """LGPD — devolve tudo que identifica o cliente final nesta loja, pra ele
+    baixar (direito de portabilidade/acesso aos próprios dados)."""
+    orders = (
+        db.query(Order)
+        .filter(Order.app_id == app_id, Order.end_user_id == end_user.id)
+        .order_by(Order.created_at.desc())
+        .all()
+    )
+    reviews = (
+        db.query(ItemReview)
+        .join(ModuleItem, ModuleItem.id == ItemReview.item_id)
+        .filter(ModuleItem.app_id == app_id, ItemReview.end_user_id == end_user.id)
+        .all()
+    )
+    wishlist = (
+        db.query(WishlistItem)
+        .filter(WishlistItem.app_id == app_id, WishlistItem.end_user_id == end_user.id)
+        .all()
+    )
+    loyalty = (
+        db.query(LoyaltyAccount)
+        .filter(LoyaltyAccount.app_id == app_id, LoyaltyAccount.end_user_id == end_user.id)
+        .first()
+    )
+
+    return EndUserDataExport(
+        profile=EndUserResponse.model_validate(end_user),
+        orders=[OrderResponse.model_validate(o) for o in orders],
+        reviews=[
+            ReviewResponse(
+                id=r.id,
+                item_id=r.item_id,
+                end_user_id=r.end_user_id,
+                end_user_name=end_user.full_name,
+                rating=r.rating,
+                comment=r.comment,
+                created_at=r.created_at,
+            )
+            for r in reviews
+        ],
+        wishlist=[WishlistItemResponse.model_validate(w) for w in wishlist],
+        loyalty_points=loyalty.points if loyalty else 0,
+    )
+
+
+@router.delete("/me")
+async def delete_my_account(
+    app_id: int,
+    db: Session = Depends(get_db),
+    end_user: AppUser = Depends(get_current_end_user),
+):
+    """LGPD — anonimiza os dados pessoais do cliente final e apaga o que não
+    precisa ser retido. Pedidos ficam (retenção fiscal/legal do lojista), mas
+    já sem PII identificável, já que o AppUser vinculado foi anonimizado."""
+    db.query(WishlistItem).filter(
+        WishlistItem.app_id == app_id, WishlistItem.end_user_id == end_user.id
+    ).delete(synchronize_session=False)
+    db.query(PushSubscription).filter(
+        PushSubscription.app_id == app_id, PushSubscription.end_user_id == end_user.id
+    ).delete(synchronize_session=False)
+    db.query(LoyaltyAccount).filter(
+        LoyaltyAccount.app_id == app_id, LoyaltyAccount.end_user_id == end_user.id
+    ).delete(synchronize_session=False)
+
+    end_user.full_name = "Usuário removido"
+    end_user.email = f"removido-{end_user.id}@deleted.local"
+    end_user.phone = None
+    end_user.address = None
+    end_user.password_hash = None
+    end_user.facebook_id = None
+    end_user.deleted_at = utcnow()
+    db.commit()
+
+    return {"message": "Sua conta e dados pessoais foram removidos."}
 
 
 @router.get("/", response_model=List[EndUserResponse])

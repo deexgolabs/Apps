@@ -114,6 +114,7 @@ class AppUser(Base):
     phone = Column(String, nullable=True)
     address = Column(String, nullable=True)  # endereço padrão, pra pré-preencher o checkout
     created_at = Column(DateTime(timezone=True), default=utcnow)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class ModuleCategory(Base):

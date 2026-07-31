@@ -660,6 +660,16 @@ class WishlistItemResponse(BaseModel):
         from_attributes = True
 
 
+class EndUserDataExport(BaseModel):
+    """LGPD — tudo que identifica o cliente final numa loja: perfil, pedidos,
+    avaliações, lista de desejos e pontos de fidelidade."""
+    profile: EndUserResponse
+    orders: List[OrderResponse]
+    reviews: List[ReviewResponse]
+    wishlist: List[WishlistItemResponse]
+    loyalty_points: int
+
+
 # ===== AUTH RESPONSE =====
 
 

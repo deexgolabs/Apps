@@ -1167,6 +1167,8 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
+  const [exportingData, setExportingData] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
   // Restaura a sessão salva no localStorage, e trata o redirect de volta do
   // login via Facebook (?fb_token=... na URL) buscando os dados do usuário.
@@ -1268,6 +1270,46 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
     }
   }
 
+  const handleExportData = async () => {
+    if (!endUserToken) return
+    setExportingData(true)
+    try {
+      const response = await publicApi.get(`/api/apps/${appId}/end-users/me/export`, {
+        headers: { Authorization: `Bearer ${endUserToken}` },
+      })
+      const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'meus-dados.json'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Erro ao exportar seus dados')
+    } finally {
+      setExportingData(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!endUserToken) return
+    if (!window.confirm('Tem certeza? Sua conta e dados pessoais serão apagados e não podem ser recuperados.')) return
+    setDeletingAccount(true)
+    try {
+      await publicApi.delete(`/api/apps/${appId}/end-users/me`, {
+        headers: { Authorization: `Bearer ${endUserToken}` },
+      })
+      localStorage.removeItem(endUserSessionKey(appId))
+      setLoggedInUser(null)
+      setEndUserToken(null)
+      toast.success('Sua conta foi removida.')
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Erro ao excluir sua conta')
+    } finally {
+      setDeletingAccount(false)
+    }
+  }
+
   if (loggedInUser) {
     return (
       <div className="text-center space-y-3 mt-8">
@@ -1352,6 +1394,25 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
         )}
 
         {endUserToken && <MyOrders appId={appId} token={endUserToken} />}
+
+        <div className="border-t border-gray-100 pt-3 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={handleExportData}
+            disabled={exportingData}
+            className="text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50"
+          >
+            {exportingData ? 'Baixando...' : 'Baixar meus dados'}
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            disabled={deletingAccount}
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+          >
+            {deletingAccount ? 'Excluindo...' : 'Excluir minha conta'}
+          </button>
+        </div>
       </div>
     )
   }

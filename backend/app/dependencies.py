@@ -72,7 +72,7 @@ async def get_current_end_user(
         AppUser.app_id == app_id
     ).first()
 
-    if not end_user:
+    if not end_user or end_user.deleted_at:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
@@ -95,7 +95,8 @@ async def get_optional_end_user(
     if not payload or payload.get("type") != "end_user" or payload.get("app_id") != app_id:
         return None
 
-    return db.query(AppUser).filter(
+    end_user = db.query(AppUser).filter(
         AppUser.id == payload.get("end_user_id"),
         AppUser.app_id == app_id
     ).first()
+    return end_user if end_user and not end_user.deleted_at else None
