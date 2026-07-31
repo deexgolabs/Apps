@@ -34,7 +34,7 @@ from app.schemas import (
     SalesReportProduct,
     SalesReportResponse,
 )
-from app.utils import compute_frete, is_within_operating_hours
+from app.utils import compute_frete, is_within_operating_hours, log_owner_action
 
 GATEWAY_MODULES = {"mercado_pago", "paypal", "pagseguro"}
 
@@ -529,6 +529,12 @@ async def update_order(
 
     if order.status == "completed" and old_status != "completed":
         _credit_loyalty_points(app_id, order, db)
+
+    if order.status != old_status:
+        log_owner_action(
+            db, current_user.id, "update_order_status", f"order:{order.id}",
+            app_id=app_id, details=f"status: {old_status} -> {order.status}",
+        )
 
     _notify_customer_status_change(app, order, db)
     return order

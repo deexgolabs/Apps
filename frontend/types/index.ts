@@ -27,6 +27,16 @@ export interface ReferralsInfo {
   referred: ReferredUser[]
 }
 
+export interface OwnerAuditLog {
+  id: number
+  app_id: number | null
+  app_name: string | null
+  action: string
+  target: string
+  details: string | null
+  created_at: string
+}
+
 export interface App {
   id: number
   user_id: number

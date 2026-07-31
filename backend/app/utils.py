@@ -135,6 +135,23 @@ def is_within_operating_hours(horario_text: str, now: datetime) -> bool:
     return False
 
 
+def log_owner_action(
+    db: Session,
+    owner_id: int,
+    action: str,
+    target: str,
+    app_id: Optional[int] = None,
+    details: Optional[str] = None,
+) -> None:
+    """Registra uma ação do dono no próprio log de auditoria (rotas chamam isso
+    depois de já ter dado commit na mudança em si, pra log não travar a ação
+    principal se algo desse errado -- mas na prática é só um insert simples)."""
+    from app.models import OwnerAuditLog
+
+    db.add(OwnerAuditLog(owner_id=owner_id, app_id=app_id, action=action, target=target, details=details))
+    db.commit()
+
+
 def delete_app_cascade(db: Session, app_id: int) -> None:
     """Apaga um app e todas as tabelas filhas na ordem certa de FK — usado tanto
     pelo dono (routes/apps.py) quanto pelo admin (routes/admin.py), já que as
@@ -155,6 +172,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         Order,
         OrderItem,
         OrderStatusEvent,
+        OwnerAuditLog,
         PushSendLog,
         PushSubscription,
         WishlistItem,
@@ -181,4 +199,10 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
     db.query(AppUser).filter(AppUser.app_id == app_id).delete(synchronize_session=False)
     db.query(AppConfig).filter(AppConfig.app_id == app_id).delete(synchronize_session=False)
     db.query(AppVersion).filter(AppVersion.app_id == app_id).delete(synchronize_session=False)
+    # Mantém as entradas do log de auditoria (inclusive a do próprio "delete_app"),
+    # só desvincula do app que está deixando de existir -- mesmo raciocínio de
+    # preservar registro já usado pra Order na exclusão de conta (LGPD).
+    db.query(OwnerAuditLog).filter(OwnerAuditLog.app_id == app_id).update(
+        {OwnerAuditLog.app_id: None}, synchronize_session=False
+    )
     db.query(App).filter(App.id == app_id).delete(synchronize_session=False)

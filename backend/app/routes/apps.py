@@ -9,7 +9,7 @@ from app.schemas import AppCreate, AppResponse, AppUpdate, AppVersionResponse
 from app.dependencies import get_current_user
 from app.constants import APP_TEMPLATES
 from app.plan_limits import get_plan_limits
-from app.utils import delete_app_cascade
+from app.utils import delete_app_cascade, log_owner_action
 
 router = APIRouter(prefix="/api/apps", tags=["apps"])
 
@@ -88,6 +88,7 @@ async def create_app(
     db.add(db_app)
     db.commit()
     db.refresh(db_app)
+    log_owner_action(db, current_user.id, "create_app", f"app:{db_app.id}:{db_app.name}", app_id=db_app.id)
     return db_app
 
 
@@ -214,6 +215,8 @@ async def update_app(
     if touches_content:
         _snapshot_app_version(app, db)
 
+    old_status = app.status
+
     if app_data.name is not None:
         app.name = app_data.name
     if app_data.description is not None:
@@ -237,6 +240,21 @@ async def update_app(
 
     db.commit()
     db.refresh(app)
+
+    if touches_content:
+        changed_fields = [
+            field for field in ("name", "description", "config", "modules")
+            if getattr(app_data, field) is not None
+        ]
+        log_owner_action(
+            db, current_user.id, "update_app", f"app:{app.id}:{app.name}",
+            app_id=app.id, details="; ".join(changed_fields),
+        )
+    if app_data.status is not None and app_data.status != old_status:
+        log_owner_action(
+            db, current_user.id, "update_app_status", f"app:{app.id}:{app.name}",
+            app_id=app.id, details=f"status: {old_status} -> {app.status}",
+        )
     return app
 
 
@@ -292,6 +310,10 @@ async def restore_app_version(
 
     db.commit()
     db.refresh(app)
+    log_owner_action(
+        db, current_user.id, "restore_version", f"app:{app.id}:{app.name}",
+        app_id=app.id, details=f"version_id: {version_id}",
+    )
     return app
 
 
@@ -313,6 +335,8 @@ async def delete_app(
             detail="App not found"
         )
 
+    app_name = app.name
     delete_app_cascade(db, app_id)
     db.commit()
+    log_owner_action(db, current_user.id, "delete_app", f"app:{app_id}:{app_name}")
     return None

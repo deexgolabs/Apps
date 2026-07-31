@@ -10,6 +10,7 @@ from app.models import User, utcnow
 from app.payment_gateways import checkout_mercado_pago, checkout_paypal, checkout_pagseguro
 from app.plan_limits import get_plan_price
 from app.schemas import BillingCheckoutRequest, BillingConfirmRequest
+from app.utils import log_owner_action
 
 PLAN_RENEWAL_DAYS = 30
 
@@ -63,10 +64,15 @@ async def confirm_billing(
     if payload.plan not in PLAN_PRICES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plano inválido")
 
+    old_plan = current_user.plan
     current_user.plan = payload.plan
     current_user.plan_expires_at = utcnow() + timedelta(days=PLAN_RENEWAL_DAYS)
     db.commit()
 
+    log_owner_action(
+        db, current_user.id, "confirm_billing", current_user.email,
+        details=f"plan: {old_plan} -> {payload.plan}",
+    )
     return {
         "message": f"Plano atualizado para {payload.plan}",
         "plan": current_user.plan,

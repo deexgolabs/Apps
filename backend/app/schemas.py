@@ -171,6 +171,19 @@ class AdminAuditLogResponse(BaseModel):
         from_attributes = True
 
 
+class OwnerAuditLogResponse(BaseModel):
+    id: int
+    app_id: Optional[int] = None
+    app_name: Optional[str] = None
+    action: str
+    target: str
+    details: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class AdminStatsResponse(BaseModel):
     mrr: float
     published_apps: int

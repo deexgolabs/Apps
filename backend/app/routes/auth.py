@@ -16,7 +16,7 @@ from app.schemas import (
     TwoFactorSetupResponse, TwoFactorEnableRequest, TwoFactorEnableResponse,
     TwoFactorDisableRequest, TwoFactorLoginRequest,
 )
-from app.utils import hash_password, verify_password, create_access_token, decode_token
+from app.utils import hash_password, verify_password, create_access_token, decode_token, log_owner_action
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 logger = logging.getLogger("app.auth")
@@ -166,6 +166,7 @@ async def enable_2fa(
     current_user.totp_enabled = True
     db.commit()
 
+    log_owner_action(db, current_user.id, "enable_2fa", current_user.email)
     return {"recovery_codes": recovery_codes}
 
 
@@ -183,6 +184,7 @@ async def disable_2fa(
     current_user.totp_recovery_codes = None
     db.commit()
 
+    log_owner_action(db, current_user.id, "disable_2fa", current_user.email)
     return {"message": "2FA desativado com sucesso."}
 
 

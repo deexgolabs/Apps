@@ -251,6 +251,23 @@ class AdminAuditLog(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class OwnerAuditLog(Base):
+    """Log de auditoria das próprias ações do dono da conta (não confundir com
+    AdminAuditLog, que é da equipe da plataforma). Cobre ações relevantes tipo
+    criar/publicar/excluir app, mudar status de pedido, ativar/desativar 2FA e
+    confirmar upgrade de plano -- pra o dono ter um histórico de "quem fez o
+    quê e quando" na própria conta."""
+    __tablename__ = "owner_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=True)
+    action = Column(String, nullable=False)
+    target = Column(String, nullable=False)
+    details = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class ModuleItem(Base):
     __tablename__ = "module_items"
 
