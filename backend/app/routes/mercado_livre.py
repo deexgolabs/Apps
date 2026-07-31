@@ -2,6 +2,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.access import get_app_for_write
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import App, AppConfig, Module, ModuleItem, User
@@ -9,13 +10,6 @@ from app.models import App, AppConfig, Module, ModuleItem, User
 router = APIRouter(prefix="/api/apps/{app_id}/modules/mercado_livre", tags=["mercado-livre"])
 
 MAX_ITEMS = 100
-
-
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
 
 
 def _get_settings(app_id: int, db: Session) -> dict:
@@ -38,7 +32,7 @@ async def sync_mercado_livre(
 ):
     """Busca os produtos do vendedor no Mercado Livre e sincroniza com os itens
     do módulo (upsert por extra.ml_item_id, pra rodar de novo sem duplicar)."""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     settings = _get_settings(app_id, db)
 
     access_token = settings.get("access_token")

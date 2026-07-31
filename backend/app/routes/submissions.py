@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from app.access import get_app_for_read
 from app.database import get_db
 from app.models import App, FormSubmission, User
 from app.schemas import SubmissionCreate, SubmissionResponse
@@ -36,10 +37,8 @@ async def list_submissions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Lista os envios recebidos por um módulo de formulário. Só o dono do app pode ver."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    """Lista os envios recebidos por um módulo de formulário. Só quem tem acesso ao app pode ver."""
+    get_app_for_read(app_id, db, current_user)
 
     return (
         db.query(FormSubmission)

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
 from app.models import App, AppConfig, Module, User
 from app.schemas import ModuleConfigResponse, ModuleConfigUpdate
@@ -7,13 +8,6 @@ from app.dependencies import get_current_user
 from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps", tags=["module-config"])
-
-
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
 
 
 def _get_module(module_name: str, db: Session) -> Module:
@@ -30,7 +24,7 @@ async def get_all_module_configs(
     current_user: User = Depends(get_current_user)
 ):
     """Busca as configurações de todos os módulos já configurados para um app"""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
 
     rows = (
         db.query(AppConfig, Module)
@@ -50,7 +44,7 @@ async def get_module_config(
     current_user: User = Depends(get_current_user)
 ):
     """Busca as configurações de um módulo específico dentro de um app"""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
     module = _get_module(module_name, db)
 
     app_config = db.query(AppConfig).filter(
@@ -70,7 +64,7 @@ async def update_module_config(
     current_user: User = Depends(get_current_user)
 ):
     """Cria ou atualiza as configurações de um módulo específico dentro de um app"""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     module = _get_module(module_name, db)
 
     app_config = db.query(AppConfig).filter(

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
 from app.models import App, ItemVariation, ModuleItem, User
 from app.schemas import VariationCreate, VariationResponse, VariationUpdate
@@ -12,16 +13,23 @@ router = APIRouter(prefix="/api/apps", tags=["item-variations"])
 MAX_VARIATIONS_PER_ITEM = 20
 
 
-def _get_owned_item(app_id: int, module_name: str, item_id: int, db: Session, current_user: User) -> ModuleItem:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+def _get_item(app_id: int, module_name: str, item_id: int, db: Session) -> ModuleItem:
     item = db.query(ModuleItem).filter(
         ModuleItem.id == item_id, ModuleItem.app_id == app_id, ModuleItem.module_name == module_name
     ).first()
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
     return item
+
+
+def _get_owned_item_for_read(app_id: int, module_name: str, item_id: int, db: Session, current_user: User) -> ModuleItem:
+    get_app_for_read(app_id, db, current_user)
+    return _get_item(app_id, module_name, item_id, db)
+
+
+def _get_owned_item_for_write(app_id: int, module_name: str, item_id: int, db: Session, current_user: User) -> ModuleItem:
+    get_app_for_write(app_id, db, current_user)
+    return _get_item(app_id, module_name, item_id, db)
 
 
 @router.get(
@@ -35,7 +43,7 @@ async def list_variations(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_item(app_id, module_name, item_id, db, current_user)
+    _get_owned_item_for_read(app_id, module_name, item_id, db, current_user)
     return (
         db.query(ItemVariation)
         .filter(ItemVariation.item_id == item_id)
@@ -57,7 +65,7 @@ async def create_variation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_item(app_id, module_name, item_id, db, current_user)
+    _get_owned_item_for_write(app_id, module_name, item_id, db, current_user)
 
     current_count = db.query(ItemVariation).filter(ItemVariation.item_id == item_id).count()
     if current_count >= MAX_VARIATIONS_PER_ITEM:
@@ -87,7 +95,7 @@ async def update_variation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_item(app_id, module_name, item_id, db, current_user)
+    _get_owned_item_for_write(app_id, module_name, item_id, db, current_user)
     variation = db.query(ItemVariation).filter(
         ItemVariation.id == variation_id, ItemVariation.item_id == item_id
     ).first()
@@ -115,7 +123,7 @@ async def delete_variation(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_item(app_id, module_name, item_id, db, current_user)
+    _get_owned_item_for_write(app_id, module_name, item_id, db, current_user)
     variation = db.query(ItemVariation).filter(
         ItemVariation.id == variation_id, ItemVariation.item_id == item_id
     ).first()

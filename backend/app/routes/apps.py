@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
+from app.access import get_app_for_read, get_app_for_write, get_my_role, require_owner
 from app.database import get_db
-from app.models import App, AppConfig, AppVersion, ModuleCategory, ModuleItem, PushSendLog, User
+from app.models import App, AppCollaborator, AppConfig, AppVersion, ModuleCategory, ModuleItem, PushSendLog, User
 from app.schemas import AppCreate, AppResponse, AppUpdate, AppVersionResponse
 from app.dependencies import get_current_user
 from app.constants import APP_TEMPLATES
@@ -46,8 +48,12 @@ async def list_apps(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Lista todos os apps do usuário"""
-    apps = db.query(App).filter(App.user_id == current_user.id).all()
+    """Lista os apps do usuário -- os que ele é dono, mais os que ele
+    participa como colaborador (equipe)."""
+    collaborator_app_ids = db.query(AppCollaborator.app_id).filter(AppCollaborator.user_id == current_user.id)
+    apps = db.query(App).filter(or_(App.user_id == current_user.id, App.id.in_(collaborator_app_ids))).all()
+    for app in apps:
+        app.my_role = get_my_role(app, current_user, db)
     return apps
 
 
@@ -102,9 +108,7 @@ async def duplicate_app(
     """Duplica um app existente (nome, cor, módulos e configuração de cada
     módulo) como rascunho novo. Não duplica dados de uso real (itens
     cadastrados, envios de formulário, usuários finais)."""
-    original = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not original:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    original = get_app_for_read(app_id, db, current_user)
 
     limit = get_plan_limits(current_user.plan, db)["apps"]
     if limit is not None:
@@ -144,17 +148,8 @@ async def get_app(
     current_user: User = Depends(get_current_user)
 ):
     """Busca app específico"""
-    app = db.query(App).filter(
-        App.id == app_id,
-        App.user_id == current_user.id
-    ).first()
-
-    if not app:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="App not found"
-        )
-
+    app = get_app_for_read(app_id, db, current_user)
+    app.my_role = get_my_role(app, current_user, db)
     return app
 
 
@@ -166,9 +161,7 @@ async def get_app_usage(
 ):
     """Uso atual do app vs limites do plano — itens, categorias e envios de
     push no mês corrente."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    app = get_app_for_read(app_id, db, current_user)
 
     limits = get_plan_limits(current_user.plan, db)
 
@@ -195,16 +188,7 @@ async def update_app(
     current_user: User = Depends(get_current_user)
 ):
     """Atualiza app"""
-    app = db.query(App).filter(
-        App.id == app_id,
-        App.user_id == current_user.id
-    ).first()
-
-    if not app:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="App not found"
-        )
+    app = get_app_for_write(app_id, db, current_user)
 
     # Histórico de versões só faz sentido pra mudança de conteúdo (nome,
     # descrição, config, módulos) -- publicar/despublicar sozinho (só status)
@@ -249,14 +233,15 @@ async def update_app(
             if getattr(app_data, field) is not None
         ]
         log_owner_action(
-            db, current_user.id, "update_app", f"app:{app.id}:{app.name}",
+            db, app.user_id, "update_app", f"app:{app.id}:{app.name}",
             app_id=app.id, details="; ".join(changed_fields),
         )
     if app_data.status is not None and app_data.status != old_status:
         log_owner_action(
-            db, current_user.id, "update_app_status", f"app:{app.id}:{app.name}",
+            db, app.user_id, "update_app_status", f"app:{app.id}:{app.name}",
             app_id=app.id, details=f"status: {old_status} -> {app.status}",
         )
+    app.my_role = get_my_role(app, current_user, db)
     return app
 
 
@@ -266,9 +251,7 @@ async def list_app_versions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    app = get_app_for_read(app_id, db, current_user)
 
     return (
         db.query(AppVersion)
@@ -288,9 +271,7 @@ async def restore_app_version(
     """Restaura o app pro estado de uma versão salva. A restauração em si
     também vira uma versão nova no histórico -- assim dá pra "desfazer o
     desfazer" restaurando de novo pra versão mais recente se precisar."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    app = get_app_for_write(app_id, db, current_user)
 
     version = db.query(AppVersion).filter(AppVersion.id == version_id, AppVersion.app_id == app_id).first()
     if not version:
@@ -314,9 +295,10 @@ async def restore_app_version(
     db.refresh(app)
     invalidate_public_cache(app.id)
     log_owner_action(
-        db, current_user.id, "restore_version", f"app:{app.id}:{app.name}",
+        db, app.user_id, "restore_version", f"app:{app.id}:{app.name}",
         app_id=app.id, details=f"version_id: {version_id}",
     )
+    app.my_role = get_my_role(app, current_user, db)
     return app
 
 
@@ -327,16 +309,7 @@ async def delete_app(
     current_user: User = Depends(get_current_user)
 ):
     """Deleta app e todos os dados filhos (categorias, itens, pedidos, usuários finais etc)."""
-    app = db.query(App).filter(
-        App.id == app_id,
-        App.user_id == current_user.id
-    ).first()
-
-    if not app:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="App not found"
-        )
+    app = require_owner(app_id, db, current_user)
 
     app_name = app.name
     delete_app_cascade(db, app_id)

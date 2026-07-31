@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.access import get_app_for_read, get_app_for_write
 from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
@@ -432,10 +433,8 @@ async def list_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Lista todos os pedidos do app (todos os módulos). Só o dono do app pode ver."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    """Lista todos os pedidos do app (todos os módulos). Só quem tem acesso ao app pode ver."""
+    get_app_for_read(app_id, db, current_user)
 
     query = db.query(Order).filter(Order.app_id == app_id)
     if status_filter:
@@ -479,9 +478,7 @@ async def close_table(
     Precisa vir registrada antes de PUT /orders/{order_id} nesse arquivo,
     senão o Starlette casa 'close-table' com o path param order_id (int) e
     devolve 422 antes de chegar aqui."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    app = get_app_for_write(app_id, db, current_user)
 
     orders = (
         db.query(Order)
@@ -517,10 +514,8 @@ async def update_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Atualiza o status de um pedido. Só o dono do app pode alterar."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    """Atualiza o status de um pedido. Dono e editores podem alterar."""
+    app = get_app_for_write(app_id, db, current_user)
 
     order = db.query(Order).filter(Order.id == order_id, Order.app_id == app_id).first()
     if not order:
@@ -538,7 +533,7 @@ async def update_order(
 
     if order.status != old_status:
         log_owner_action(
-            db, current_user.id, "update_order_status", f"order:{order.id}",
+            db, app.user_id, "update_order_status", f"order:{order.id}",
             app_id=app_id, details=f"status: {old_status} -> {order.status}",
         )
 
@@ -626,13 +621,6 @@ async def cancel_my_order(
     return order
 
 
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
-
-
 @router.get("/orders/report", response_model=SalesReportResponse)
 async def get_sales_report(
     app_id: int,
@@ -641,8 +629,8 @@ async def get_sales_report(
     current_user: User = Depends(get_current_user),
 ):
     """Receita (só pedidos completed), contagem por status e top-10 produtos —
-    opcionalmente filtrado aos últimos `days` dias. Só o dono do app pode ver."""
-    _get_owned_app(app_id, db, current_user)
+    opcionalmente filtrado aos últimos `days` dias. Só quem tem acesso ao app pode ver."""
+    get_app_for_read(app_id, db, current_user)
 
     query = db.query(Order).filter(Order.app_id == app_id)
     if days:
@@ -681,8 +669,8 @@ async def export_orders_csv(
     current_user: User = Depends(get_current_user),
 ):
     """Exporta todos os pedidos do app em CSV — um pedido por linha, com um
-    resumo dos itens. Só o dono do app pode exportar."""
-    _get_owned_app(app_id, db, current_user)
+    resumo dos itens. Só quem tem acesso ao app pode exportar."""
+    get_app_for_read(app_id, db, current_user)
 
     orders = db.query(Order).filter(Order.app_id == app_id).order_by(Order.created_at.desc()).all()
 

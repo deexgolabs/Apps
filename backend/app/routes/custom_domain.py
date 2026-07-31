@@ -6,6 +6,7 @@ import dns.resolver
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import App, User
@@ -19,13 +20,6 @@ DOMAIN_RE = re.compile(r"^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9
 
 def _challenge_host(domain: str) -> str:
     return f"_deexgo-challenge.{domain}"
-
-
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
 
 
 def _to_response(app: App) -> CustomDomainResponse:
@@ -45,7 +39,7 @@ async def get_custom_domain(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    app = _get_owned_app(app_id, db, current_user)
+    app = get_app_for_read(app_id, db, current_user)
     return _to_response(app)
 
 
@@ -59,7 +53,7 @@ async def set_custom_domain(
     """Registra o domínio desejado (ainda não verificado) e gera um token de
     desafio DNS. Trocar de domínio sempre reinicia a verificação — mesmo que
     já tivesse um verificado antes, o novo precisa provar posse de novo."""
-    app = _get_owned_app(app_id, db, current_user)
+    app = get_app_for_write(app_id, db, current_user)
 
     domain = payload.domain.strip().lower()
     domain = re.sub(r"^https?://", "", domain).split("/")[0]
@@ -90,7 +84,7 @@ async def verify_custom_domain(
 ):
     """Confere se o registro TXT de desafio foi criado no DNS do domínio.
     Nunca confia em nada que não seja a resposta real do DNS."""
-    app = _get_owned_app(app_id, db, current_user)
+    app = get_app_for_write(app_id, db, current_user)
 
     if not app.custom_domain:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum domínio pendente de verificação")
@@ -130,7 +124,7 @@ async def remove_custom_domain(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    app = _get_owned_app(app_id, db, current_user)
+    app = get_app_for_write(app_id, db, current_user)
     app.custom_domain = None
     app.custom_domain_verified = False
     app.custom_domain_verification_token = None

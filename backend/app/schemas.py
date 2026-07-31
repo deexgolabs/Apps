@@ -278,9 +278,28 @@ class AppResponse(AppBase):
     custom_domain_verified: bool = False
     created_at: datetime
     updated_at: datetime
+    my_role: str = "owner"  # "owner" | "editor" | "viewer" -- setado na rota, não é coluna do modelo
 
     class Config:
         from_attributes = True
+
+
+class CollaboratorInvite(BaseModel):
+    email: EmailStr
+    role: str = "editor"
+
+
+class CollaboratorUpdate(BaseModel):
+    role: str
+
+
+class CollaboratorResponse(BaseModel):
+    id: int
+    user_id: int
+    email: str
+    full_name: str
+    role: str
+    created_at: datetime
 
 
 class CustomDomainRequest(BaseModel):

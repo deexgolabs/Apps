@@ -303,6 +303,21 @@ class WebhookSubscription(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class AppCollaborator(Base):
+    """Membro da equipe de um app, além do dono (App.user_id) -- dá acesso
+    compartilhado a um app sem precisar dividir a conta inteira. Papéis:
+    'editor' (mesmo acesso de conteúdo do dono, exceto excluir o app ou
+    gerenciar a equipe) e 'viewer' (só leitura). Ver app/access.py."""
+    __tablename__ = "app_collaborators"
+    __table_args__ = (UniqueConstraint("app_id", "user_id", name="uq_app_collaborators_app_user"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String, nullable=False, default="editor")  # "editor" | "viewer"
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class ModuleItem(Base):
     __tablename__ = "module_items"
 

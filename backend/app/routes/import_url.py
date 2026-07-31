@@ -7,6 +7,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.access import get_app_for_write
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import App, User
@@ -73,9 +74,7 @@ async def import_from_url(
     nome/descrição/imagem via meta tags Open Graph (og:title, og:description,
     og:image) -- não salva nada sozinho, só devolve os dados pro dono revisar
     e confirmar clicando em Salvar, igual qualquer outra mudança no construtor."""
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
+    get_app_for_write(app_id, db, current_user)
 
     url = payload.url.strip()
     if not url.startswith(("http://", "https://")):

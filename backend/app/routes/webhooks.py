@@ -5,6 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import App, Order, User, WebhookSubscription
@@ -18,20 +19,13 @@ logger = logging.getLogger("app.webhooks")
 MAX_WEBHOOKS_PER_APP = 5
 
 
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
-
-
 @router.get("/subscriptions", response_model=List[WebhookSubscriptionResponse])
 async def list_webhook_subscriptions(
     app_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
     return (
         db.query(WebhookSubscription)
         .filter(WebhookSubscription.app_id == app_id)
@@ -50,7 +44,7 @@ async def create_webhook_subscription(
     """Cria um webhook de saída pro app -- o `secret` retornado é usado pra
     assinar (HMAC-SHA256, header X-Webhook-Signature) todo POST enviado pra
     `url`, e só é mostrado por completo aqui na criação."""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
 
     if payload.event not in VALID_EVENTS and payload.event != "*":
         raise HTTPException(
@@ -87,7 +81,7 @@ async def update_webhook_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     subscription = db.query(WebhookSubscription).filter(
         WebhookSubscription.id == subscription_id, WebhookSubscription.app_id == app_id
     ).first()
@@ -117,7 +111,7 @@ async def delete_webhook_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     subscription = db.query(WebhookSubscription).filter(
         WebhookSubscription.id == subscription_id, WebhookSubscription.app_id == app_id
     ).first()

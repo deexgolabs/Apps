@@ -50,6 +50,7 @@ export interface App {
   modules: string[]
   custom_domain: string | null
   custom_domain_verified: boolean
+  my_role: 'owner' | 'editor' | 'viewer'
   created_at: string
   updated_at: string
 }

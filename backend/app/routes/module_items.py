@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
+from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
 from app.models import App, ModuleCategory, ModuleItem, User
 from app.schemas import CategoryCreate, CategoryResponse, ImportSummaryResponse, ItemCreate, ItemUpdate, ItemResponse
@@ -14,13 +15,6 @@ from app.item_utils import attach_rating_aggregates
 from app.cache import invalidate_public_cache
 
 router = APIRouter(prefix="/api/apps", tags=["module-items"])
-
-
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
 
 
 # ===== CATEGORIES =====
@@ -33,7 +27,7 @@ async def list_categories(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
     return (
         db.query(ModuleCategory)
         .filter(ModuleCategory.app_id == app_id, ModuleCategory.module_name == module_name)
@@ -50,7 +44,7 @@ async def create_category(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
 
     limit = get_plan_limits(current_user.plan, db)["categories"]
     current_count = db.query(ModuleCategory).filter(ModuleCategory.app_id == app_id).count()
@@ -76,7 +70,7 @@ async def delete_category(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     category = db.query(ModuleCategory).filter(
         ModuleCategory.id == category_id,
         ModuleCategory.app_id == app_id,
@@ -105,7 +99,7 @@ async def list_items(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
     query = db.query(ModuleItem).filter(ModuleItem.app_id == app_id, ModuleItem.module_name == module_name)
     if q:
         query = query.filter(ModuleItem.name.ilike(f"%{q}%"))
@@ -125,7 +119,7 @@ async def create_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
 
     limit = get_plan_limits(current_user.plan, db)["items"]
     current_count = db.query(ModuleItem).filter(ModuleItem.app_id == app_id).count()
@@ -152,7 +146,7 @@ async def export_items_csv(
 ):
     """Precisa vir registrada antes de PUT/DELETE /items/{item_id} nesse arquivo,
     senão o Starlette poderia casar 'export.csv' com o path param item_id."""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
     items = (
         db.query(ModuleItem, ModuleCategory.name)
         .outerjoin(ModuleCategory, ModuleItem.category_id == ModuleCategory.id)
@@ -193,7 +187,7 @@ async def import_items_csv(
     """Importa itens em lote via CSV (colunas: name, description, price, stock,
     category, image_url — mesmo formato do export). Categorias são criadas
     automaticamente se ainda não existirem. Para no limite de itens do plano."""
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
 
     raw = (await file.read()).decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(raw))
@@ -269,7 +263,7 @@ async def update_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     item = db.query(ModuleItem).filter(
         ModuleItem.id == item_id,
         ModuleItem.app_id == app_id,
@@ -295,7 +289,7 @@ async def delete_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     item = db.query(ModuleItem).filter(
         ModuleItem.id == item_id,
         ModuleItem.app_id == app_id,

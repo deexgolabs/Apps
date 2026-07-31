@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
+from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
 from app.models import App, Coupon, User
 from app.schemas import (
@@ -20,20 +21,13 @@ from app.public_utils import get_published_app
 router = APIRouter(prefix="/api/apps/{app_id}", tags=["coupons"])
 
 
-def _get_owned_app(app_id: int, db: Session, current_user: User) -> App:
-    app = db.query(App).filter(App.id == app_id, App.user_id == current_user.id).first()
-    if not app:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="App not found")
-    return app
-
-
 @router.get("/coupons", response_model=List[CouponResponse])
 async def list_coupons(
     app_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_read(app_id, db, current_user)
     return db.query(Coupon).filter(Coupon.app_id == app_id).order_by(Coupon.created_at.desc()).all()
 
 
@@ -44,7 +38,7 @@ async def create_coupon(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
 
     limit = get_plan_limits(current_user.plan, db)["coupons"]
     current_count = db.query(Coupon).filter(Coupon.app_id == app_id, Coupon.active == True).count()
@@ -74,7 +68,7 @@ async def update_coupon(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.app_id == app_id).first()
     if not coupon:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coupon not found")
@@ -94,7 +88,7 @@ async def delete_coupon(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _get_owned_app(app_id, db, current_user)
+    get_app_for_write(app_id, db, current_user)
     coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.app_id == app_id).first()
     if not coupon:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coupon not found")

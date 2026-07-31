@@ -19,6 +19,7 @@ import ImportFromUrlPanel from '@/components/ImportFromUrlPanel'
 import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
 import WebhooksManager from '@/components/WebhooksManager'
+import TeamManager from '@/components/TeamManager'
 import SalesReport from '@/components/SalesReport'
 import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
@@ -39,7 +40,7 @@ const FONT_OPTIONS = [
   { value: "'Trebuchet MS', sans-serif", label: 'Trebuchet MS' },
 ]
 
-type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'relatorios' | 'notificacoes' | 'publicar'
+type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'relatorios' | 'notificacoes' | 'publicar' | 'equipe'
 
 const TOUR_STEPS = [
   {
@@ -279,9 +280,13 @@ export default function AppEditorPage({ params }: PageProps) {
     }
   }
 
+  const isOwner = app?.my_role === 'owner'
+  const isViewer = app?.my_role === 'viewer'
+
   const TABS: { id: Tab; label: string }[] = activeModules.includes('push_notifications')
     ? [...BASE_TABS.slice(0, 4), { id: 'notificacoes', label: 'Notificações' }, ...BASE_TABS.slice(4)]
     : BASE_TABS
+  const VISIBLE_TABS = isOwner ? [...TABS, { id: 'equipe' as Tab, label: 'Equipe' }] : TABS
 
   const checklistItems = [
     { label: 'Definir logo ou ícone do app', done: !!(logoUrl || iconUrl) },
@@ -312,7 +317,7 @@ export default function AppEditorPage({ params }: PageProps) {
         <div className="lg:grid lg:grid-cols-[1fr_320px] gap-8 items-start">
         <div className="bg-white rounded-lg shadow p-8">
           <div className="flex gap-2 border-b border-gray-200 mb-8" data-tour="tabs">
-            {TABS.map((tab) => (
+            {VISIBLE_TABS.map((tab) => (
               <button
                 key={tab.id}
                 type="button"
@@ -328,6 +333,12 @@ export default function AppEditorPage({ params }: PageProps) {
               </button>
             ))}
           </div>
+
+          {isViewer && (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+              Você tem acesso de visualização a este app — pode ver tudo, mas não pode salvar alterações.
+            </div>
+          )}
 
           <form onSubmit={handleSave} className="space-y-8">
             {activeTab === 'geral' && (
@@ -591,22 +602,28 @@ export default function AppEditorPage({ params }: PageProps) {
               </div>
             )}
 
-            <div className="flex gap-4 pt-4 border-t border-gray-200" data-tour="save-button">
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
-              >
-                {saving ? 'Salvando...' : 'Salvar'}
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                className="flex-1 border border-red-300 text-red-600 py-2 rounded-lg font-semibold hover:bg-red-50 transition"
-              >
-                Excluir Aplicativo
-              </button>
-            </div>
+            {activeTab === 'equipe' && <TeamManager appId={id} isOwner={isOwner} />}
+
+            {!isViewer && (
+              <div className="flex gap-4 pt-4 border-t border-gray-200" data-tour="save-button">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    className="flex-1 border border-red-300 text-red-600 py-2 rounded-lg font-semibold hover:bg-red-50 transition"
+                  >
+                    Excluir Aplicativo
+                  </button>
+                )}
+              </div>
+            )}
           </form>
         </div>
 
