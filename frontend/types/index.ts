@@ -8,6 +8,7 @@ export interface User {
   is_verified: boolean
   is_admin: boolean
   bonus_app_slots: number
+  totp_enabled: boolean
   created_at: string
 }
 

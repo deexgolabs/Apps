@@ -33,6 +33,7 @@ class UserResponse(UserBase):
     is_verified: bool
     is_admin: bool
     bonus_app_slots: int
+    totp_enabled: bool
     created_at: datetime
 
     class Config:
@@ -41,6 +42,28 @@ class UserResponse(UserBase):
 
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
+
+
+class TwoFactorSetupResponse(BaseModel):
+    secret: str
+    otpauth_url: str
+
+
+class TwoFactorEnableRequest(BaseModel):
+    code: str
+
+
+class TwoFactorEnableResponse(BaseModel):
+    recovery_codes: List[str]
+
+
+class TwoFactorDisableRequest(BaseModel):
+    password: str
+
+
+class TwoFactorLoginRequest(BaseModel):
+    temp_token: str
+    code: str
 
 
 class ReferredUser(BaseModel):

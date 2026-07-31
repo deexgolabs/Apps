@@ -30,6 +30,22 @@ export const authService = {
 
   async login(data: LoginData) {
     const response = await api.post('/api/auth/login', data)
+    if (response.data.requires_2fa) return response.data
+
+    const { access_token, user } = response.data
+
+    useAuthStore.setState({
+      token: access_token,
+      user,
+      isAuthenticated: true,
+    })
+
+    localStorage.setItem('token', access_token)
+    return response.data
+  },
+
+  async verify2fa(tempToken: string, code: string) {
+    const response = await api.post('/api/auth/2fa/verify-login', { temp_token: tempToken, code })
     const { access_token, user } = response.data
 
     useAuthStore.setState({

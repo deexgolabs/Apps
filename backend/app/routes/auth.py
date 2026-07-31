@@ -1,5 +1,7 @@
 import logging
+import secrets
 from datetime import timedelta
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.config import settings
@@ -11,6 +13,8 @@ from app.rate_limit import limiter
 from app.schemas import (
     UserCreate, UserLogin, Token, UserResponse,
     ForgotPasswordRequest, ResetPasswordRequest,
+    TwoFactorSetupResponse, TwoFactorEnableRequest, TwoFactorEnableResponse,
+    TwoFactorDisableRequest, TwoFactorLoginRequest,
 )
 from app.utils import hash_password, verify_password, create_access_token, decode_token
 
@@ -70,7 +74,7 @@ async def register(request: Request, user_data: UserCreate, db: Session = Depend
     }
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 @limiter.limit("5/minute")
 async def login(request: Request, user_data: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user_data.email).first()
@@ -81,6 +85,13 @@ async def login(request: Request, user_data: UserLogin, db: Session = Depends(ge
             detail="Invalid email or password"
         )
 
+    if db_user.totp_enabled:
+        temp_token = create_access_token(
+            data={"sub": db_user.email, "type": "2fa_pending"},
+            expires_delta=timedelta(minutes=5),
+        )
+        return {"requires_2fa": True, "temp_token": temp_token}
+
     access_token = create_access_token(data={"sub": db_user.email})
 
     return {
@@ -88,6 +99,91 @@ async def login(request: Request, user_data: UserLogin, db: Session = Depends(ge
         "token_type": "bearer",
         "user": UserResponse.model_validate(db_user)
     }
+
+
+@router.post("/2fa/verify-login", response_model=Token)
+@limiter.limit("5/minute")
+async def verify_2fa_login(request: Request, payload: TwoFactorLoginRequest, db: Session = Depends(get_db)):
+    data = decode_token(payload.temp_token)
+    if not data or data.get("type") != "2fa_pending":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado")
+
+    db_user = db.query(User).filter(User.email == data.get("sub")).first()
+    if not db_user or not db_user.totp_enabled:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Token inválido ou expirado")
+
+    valid = bool(db_user.totp_secret) and pyotp.TOTP(db_user.totp_secret).verify(payload.code, valid_window=1)
+
+    if not valid and db_user.totp_recovery_codes:
+        for stored_hash in db_user.totp_recovery_codes:
+            if verify_password(payload.code, stored_hash):
+                valid = True
+                db_user.totp_recovery_codes = [h for h in db_user.totp_recovery_codes if h != stored_hash]
+                db.commit()
+                break
+
+    if not valid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código inválido")
+
+    access_token = create_access_token(data={"sub": db_user.email})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.model_validate(db_user)
+    }
+
+
+@router.post("/2fa/setup", response_model=TwoFactorSetupResponse)
+async def setup_2fa(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Gera um novo segredo TOTP (ainda não ativa o 2FA — só após confirmar
+    um código válido em /2fa/enable, pra garantir que o dono configurou certo
+    o autenticador antes de travar o login atrás dele)."""
+    secret = pyotp.random_base32()
+    current_user.totp_secret = secret
+    db.commit()
+
+    otpauth_url = pyotp.TOTP(secret).provisioning_uri(
+        name=current_user.email, issuer_name="Plataforma de Apps"
+    )
+    return {"secret": secret, "otpauth_url": otpauth_url}
+
+
+@router.post("/2fa/enable", response_model=TwoFactorEnableResponse)
+async def enable_2fa(
+    payload: TwoFactorEnableRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not current_user.totp_secret:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Configure o 2FA primeiro em /2fa/setup")
+
+    if not pyotp.TOTP(current_user.totp_secret).verify(payload.code, valid_window=1):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código inválido")
+
+    recovery_codes = ["-".join([secrets.token_hex(2), secrets.token_hex(2)]) for _ in range(8)]
+    current_user.totp_recovery_codes = [hash_password(code) for code in recovery_codes]
+    current_user.totp_enabled = True
+    db.commit()
+
+    return {"recovery_codes": recovery_codes}
+
+
+@router.post("/2fa/disable")
+async def disable_2fa(
+    payload: TwoFactorDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not verify_password(payload.password, current_user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Senha incorreta")
+
+    current_user.totp_enabled = False
+    current_user.totp_secret = None
+    current_user.totp_recovery_codes = None
+    db.commit()
+
+    return {"message": "2FA desativado com sucesso."}
 
 
 @router.post("/forgot-password")

@@ -27,6 +27,9 @@ class User(Base):
     bonus_app_slots = Column(Integer, default=0, nullable=False)
     referral_reward_granted = Column(Boolean, default=False, nullable=False)
     plan_expires_at = Column(DateTime(timezone=True), nullable=True)
+    totp_secret = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False)
+    totp_recovery_codes = Column(JSON, nullable=True)
 
 
 class App(Base):
