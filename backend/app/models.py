@@ -177,6 +177,7 @@ class Order(Base):
     payment_method = Column(String, nullable=True)
     payment_reference = Column(String, nullable=True)
     status = Column(String, default="pending")  # pending, confirmed, preparing, completed, cancelled
+    review_requested_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

@@ -93,6 +93,7 @@ async def _background_job_worker() -> None:
     from app.jobs import run_pending_jobs
     from app.abandoned_cart import send_abandoned_cart_reminders
     from app.auto_coupons import send_birthday_coupons
+    from app.review_requests import send_review_requests
 
     while True:
         try:
@@ -101,6 +102,7 @@ async def _background_job_worker() -> None:
                 run_pending_jobs(db)
                 send_abandoned_cart_reminders(db)
                 send_birthday_coupons(db)
+                send_review_requests(db)
             finally:
                 db.close()
         except Exception:
