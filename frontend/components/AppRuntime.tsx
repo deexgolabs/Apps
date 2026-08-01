@@ -46,6 +46,8 @@ import LoyaltyBalance from '@/components/LoyaltyBalance'
 import WishlistButton from '@/components/WishlistButton'
 import WishlistPanel from '@/components/WishlistPanel'
 import InstallPwaButton from '@/components/InstallPwaButton'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
+import { LanguageProvider, useLanguage } from '@/lib/i18n'
 import IconGridHomeScreen from '@/components/IconGridHomeScreen'
 import BottomTabBar from '@/components/BottomTabBar'
 
@@ -1143,6 +1145,7 @@ function MyOrders({ appId, token }: { appId: string; token: string }) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [cancellingId, setCancellingId] = useState<number | null>(null)
   const cart = useOptionalCart()
+  const { t } = useLanguage()
 
   useEffect(() => {
     const fetchOrders = () => {
@@ -1187,7 +1190,7 @@ function MyOrders({ appId, token }: { appId: string; token: string }) {
 
   return (
     <div className="text-left space-y-2 pt-2 border-t border-gray-200">
-      <p className="text-sm font-medium text-gray-700">Meus pedidos</p>
+      <p className="text-sm font-medium text-gray-700">{t('orders.title')}</p>
       {orders.map((order) => {
         const expanded = expandedId === order.id
         return (
@@ -1300,6 +1303,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
   const [savingProfile, setSavingProfile] = useState(false)
   const [exportingData, setExportingData] = useState(false)
   const [deletingAccount, setDeletingAccount] = useState(false)
+  const { t } = useLanguage()
 
   // Restaura a sessão salva no localStorage, e trata o redirect de volta do
   // login via Facebook (?fb_token=... na URL) buscando os dados do usuário.
@@ -1449,7 +1453,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
   if (loggedInUser) {
     return (
       <div className="text-center space-y-3 mt-8">
-        <p className="text-sm text-gray-700">Olá, <span className="font-semibold">{loggedInUser.full_name}</span>!</p>
+        <p className="text-sm text-gray-700">{t('auth.greeting')}, <span className="font-semibold">{loggedInUser.full_name}</span>!</p>
         <div className="flex items-center justify-center gap-3">
           <button
             type="button"
@@ -1462,7 +1466,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
             }}
             className="text-xs text-indigo-600 hover:text-indigo-700"
           >
-            {editingProfile ? 'Cancelar' : 'Editar perfil'}
+            {editingProfile ? t('auth.cancel') : t('auth.edit_profile')}
           </button>
           <button
             type="button"
@@ -1477,7 +1481,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
             }}
             className="text-xs text-gray-400 hover:text-gray-600"
           >
-            Sair
+            {t('auth.logout')}
           </button>
         </div>
 
@@ -1595,7 +1599,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
             mode === 'login' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
-          Entrar
+          {t('auth.login_tab')}
         </button>
         <button
           type="button"
@@ -1604,7 +1608,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
             mode === 'register' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'
           }`}
         >
-          Cadastrar
+          {t('auth.register_tab')}
         </button>
       </div>
       {mode === 'register' && (
@@ -1612,7 +1616,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
           type="text"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
-          placeholder="Nome"
+          placeholder={t('auth.name')}
           className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
         />
       )}
@@ -1620,14 +1624,14 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
         type="text"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email"
+        placeholder={t('auth.email')}
         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
       />
       <input
         type="password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        placeholder="Senha"
+        placeholder={t('auth.password')}
         className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
       />
       <button
@@ -1636,7 +1640,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
         disabled={loading}
         className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
       >
-        {loading ? 'Aguarde...' : mode === 'register' ? 'Cadastrar' : 'Entrar'}
+        {loading ? t('auth.submit_loading') : mode === 'register' ? t('auth.submit_register') : t('auth.submit_login')}
       </button>
       <div className="flex items-center gap-2 text-xs text-gray-400">
         <div className="flex-1 h-px bg-gray-200" />
@@ -1648,7 +1652,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
         onClick={handleFacebookLogin}
         className="w-full bg-[#1877F2] text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-[#1465d1] transition"
       >
-        Continuar com Facebook
+        {t('auth.facebook')}
       </button>
     </div>
   )
@@ -2037,7 +2041,14 @@ export default function AppRuntime({
             <span className="text-white text-sm font-semibold truncate">{appName}</span>
           )}
         </button>
-        {mode === 'public' ? <InstallPwaButton /> : <span className="w-4" />}
+        {mode === 'public' ? (
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            <InstallPwaButton />
+          </div>
+        ) : (
+          <span className="w-4" />
+        )}
       </div>
 
       {isHomeScreen && homeImageUrl && (
@@ -2216,5 +2227,11 @@ export default function AppRuntime({
     </div>
   )
 
-  return mode === 'public' ? <CartProvider appId={appId}>{content}</CartProvider> : content
+  return mode === 'public' ? (
+    <LanguageProvider appId={appId}>
+      <CartProvider appId={appId}>{content}</CartProvider>
+    </LanguageProvider>
+  ) : (
+    content
+  )
 }

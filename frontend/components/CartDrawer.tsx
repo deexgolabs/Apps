@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useCart } from '@/context/CartContext'
 import CheckoutForm from '@/components/CheckoutForm'
+import { useLanguage } from '@/lib/i18n'
 
 export default function CartDrawer({
   appId,
@@ -23,6 +24,7 @@ export default function CartDrawer({
 }) {
   const cart = useCart()
   const [checkingOut, setCheckingOut] = useState(false)
+  const { t } = useLanguage()
 
   if (!open) return null
 
@@ -30,7 +32,7 @@ export default function CartDrawer({
     <div className="absolute inset-0 z-30 bg-white/95 flex flex-col">
       <div className="h-10 flex items-center justify-between px-3 bg-gray-800">
         <span className="text-white text-sm font-semibold">
-          {checkingOut ? 'Finalizar pedido' : 'Seu carrinho'}
+          {checkingOut ? t('cart.checkout') : t('cart.title')}
         </span>
         <button
           type="button"
@@ -59,7 +61,7 @@ export default function CartDrawer({
             }}
           />
         ) : cart.items.length === 0 ? (
-          <p className="text-sm text-gray-400 italic text-center mt-8">Seu carrinho está vazio</p>
+          <p className="text-sm text-gray-400 italic text-center mt-8">{t('cart.empty')}</p>
         ) : (
           <div className="space-y-3">
             {cart.items.map((item) => (
@@ -98,7 +100,7 @@ export default function CartDrawer({
       {!checkingOut && cart.items.length > 0 && (
         <div className="border-t border-gray-200 p-3">
           <div className="flex justify-between text-sm font-medium mb-2">
-            <span>Subtotal</span>
+            <span>{t('cart.subtotal')}</span>
             <span>R$ {cart.subtotal.toFixed(2)}</span>
           </div>
           <button
@@ -106,7 +108,7 @@ export default function CartDrawer({
             onClick={() => setCheckingOut(true)}
             className="w-full bg-indigo-600 text-white text-sm font-medium rounded py-2"
           >
-            Finalizar pedido
+            {t('cart.checkout')}
           </button>
         </div>
       )}

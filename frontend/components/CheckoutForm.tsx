@@ -9,6 +9,7 @@ import { showApiError } from '@/lib/apiError'
 import { computeFrete } from '@/lib/frete'
 import { generateDeliverySlots, parsePickupPoints } from '@/lib/deliverySlots'
 import toast from 'react-hot-toast'
+import { useLanguage } from '@/lib/i18n'
 
 const GATEWAY_LABELS: Record<string, string> = {
   mercado_pago: 'Mercado Pago',
@@ -34,6 +35,7 @@ export default function CheckoutForm({
   janelaHorarios?: string
 }) {
   const cart = useCart()
+  const { t } = useLanguage()
   const [values, setValues] = useState<Record<string, string>>(() => {
     // Pré-preenche com os dados salvos no perfil do cliente (se ele estiver
     // logado via login_cadastro) — economiza redigitar nome/telefone/endereço
@@ -412,9 +414,9 @@ export default function CheckoutForm({
         className="w-full bg-indigo-600 text-white text-sm font-medium rounded py-2 disabled:opacity-50"
       >
         {sending
-          ? 'Enviando...'
+          ? t('checkout.sending')
           : paymentMethod === 'entrega'
-            ? `Confirmar pedido — R$ ${total.toFixed(2)}`
+            ? `${t('checkout.submit')} — R$ ${total.toFixed(2)}`
             : `Pagar com ${GATEWAY_LABELS[paymentMethod] || paymentMethod} — R$ ${total.toFixed(2)}`}
       </button>
     </div>
