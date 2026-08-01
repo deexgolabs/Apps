@@ -2147,6 +2147,8 @@ export default function AppRuntime({
             open={cartOpen}
             onClose={() => setCartOpen(false)}
             freteRegras={configs['calculo_frete']?.regras}
+            pontosRetirada={configs['pagamento_entrega']?.pontos_retirada}
+            janelaHorarios={configs['pagamento_entrega']?.janela_horarios}
             availableGateways={PAYMENT_GATEWAY_MODULES.filter(
               (gw) =>
                 activeModules.includes(gw) &&

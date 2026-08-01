@@ -10,12 +10,16 @@ export default function CartDrawer({
   onClose,
   freteRegras,
   availableGateways,
+  pontosRetirada,
+  janelaHorarios,
 }: {
   appId: string
   open: boolean
   onClose: () => void
   freteRegras?: string
   availableGateways?: string[]
+  pontosRetirada?: string
+  janelaHorarios?: string
 }) {
   const cart = useCart()
   const [checkingOut, setCheckingOut] = useState(false)
@@ -47,6 +51,8 @@ export default function CartDrawer({
             appId={appId}
             freteRegras={freteRegras}
             availableGateways={availableGateways}
+            pontosRetirada={pontosRetirada}
+            janelaHorarios={janelaHorarios}
             onDone={() => {
               setCheckingOut(false)
               onClose()

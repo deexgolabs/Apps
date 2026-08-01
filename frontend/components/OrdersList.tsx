@@ -34,7 +34,14 @@ function handlePrintOrder(appName: string, order: Order) {
     printComanda({
       appName,
       title: `Pedido #${order.id}`,
-      subtitle: [fulfillment, order.coupon_code ? `Cupom: ${order.coupon_code}` : null].filter(Boolean).join(' · ') || undefined,
+      subtitle: [
+        fulfillment,
+        order.pickup_point ? `Retirada em: ${order.pickup_point}` : null,
+        order.delivery_slot ? `Horário: ${order.delivery_slot}` : null,
+        order.coupon_code ? `Cupom: ${order.coupon_code}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || undefined,
       lines: order.items.map((oi) => ({ label: oi.name, qty: oi.quantity, unitPrice: oi.unit_price, total: oi.subtotal })),
       total: order.amount || 0,
       footer: dataLines || undefined,
@@ -128,6 +135,8 @@ export default function OrdersList({ appId, appName, moduleName }: { appId: stri
                   : order.fulfillment_type === 'dine_in'
                     ? `🍽️ Mesa ${order.table_number || ''}`
                     : null}
+              {order.pickup_point && <span className="ml-2">📍 {order.pickup_point}</span>}
+              {order.delivery_slot && <span className="ml-2">🕐 {order.delivery_slot}</span>}
               {order.coupon_code && <span className="ml-2">🏷️ Cupom: {order.coupon_code}</span>}
             </p>
           )}

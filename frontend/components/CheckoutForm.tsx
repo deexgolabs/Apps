@@ -7,6 +7,7 @@ import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
 import { useCart } from '@/context/CartContext'
 import { showApiError } from '@/lib/apiError'
 import { computeFrete } from '@/lib/frete'
+import { generateDeliverySlots, parsePickupPoints } from '@/lib/deliverySlots'
 import toast from 'react-hot-toast'
 
 const GATEWAY_LABELS: Record<string, string> = {
@@ -21,12 +22,16 @@ export default function CheckoutForm({
   freteRegras,
   allowPickup = true,
   availableGateways = [],
+  pontosRetirada,
+  janelaHorarios,
 }: {
   appId: string
   onDone: () => void
   freteRegras?: string
   allowPickup?: boolean
   availableGateways?: string[]
+  pontosRetirada?: string
+  janelaHorarios?: string
 }) {
   const cart = useCart()
   const [values, setValues] = useState<Record<string, string>>(() => {
@@ -49,6 +54,8 @@ export default function CheckoutForm({
   const [cep, setCep] = useState('')
   const [fulfillment, setFulfillment] = useState<'delivery' | 'pickup' | 'dine_in'>('delivery')
   const [tableNumber, setTableNumber] = useState('')
+  const [pickupPoint, setPickupPoint] = useState('')
+  const [deliverySlot, setDeliverySlot] = useState('')
   const [couponInput, setCouponInput] = useState('')
   const [couponDiscount, setCouponDiscount] = useState<number | null>(null)
   const [couponError, setCouponError] = useState<string | null>(null)
@@ -70,6 +77,8 @@ export default function CheckoutForm({
   const allowDineIn = cart.cartModuleName === 'cardapio'
   const deliveryFee = fulfillment === 'delivery' ? computeFrete(freteRegras || '', cep) : 0
   const total = cart.subtotal + deliveryFee - (couponDiscount || 0)
+  const pickupPoints = parsePickupPoints(pontosRetirada || '')
+  const deliverySlots = fulfillment !== 'dine_in' ? generateDeliverySlots(janelaHorarios || '') : []
 
   const handleValidateCoupon = async () => {
     if (!couponInput.trim()) {
@@ -110,6 +119,8 @@ export default function CheckoutForm({
           fulfillment_type: fulfillment,
           cep: fulfillment === 'delivery' ? cep : undefined,
           table_number: fulfillment === 'dine_in' ? tableNumber.trim() || undefined : undefined,
+          pickup_point: fulfillment === 'pickup' ? pickupPoint || undefined : undefined,
+          delivery_slot: fulfillment !== 'dine_in' ? deliverySlot || undefined : undefined,
           gateway: paymentMethod !== 'entrega' ? paymentMethod : undefined,
         },
         { headers: endUserAuthHeader(appId) }
@@ -244,6 +255,45 @@ export default function CheckoutForm({
             placeholder="Ex: 5"
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
           />
+        </div>
+      )}
+
+      {fulfillment === 'pickup' && pickupPoints.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Ponto de retirada</label>
+          <select
+            value={pickupPoint}
+            onChange={(e) => setPickupPoint(e.target.value)}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+          >
+            <option value="">Selecione...</option>
+            {pickupPoints.map((p) => (
+              <option key={p.name} value={p.address ? `${p.name}: ${p.address}` : p.name}>
+                {p.name}
+                {p.address ? ` — ${p.address}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {deliverySlots.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Horário de {fulfillment === 'pickup' ? 'retirada' : 'entrega'}
+          </label>
+          <select
+            value={deliverySlot}
+            onChange={(e) => setDeliverySlot(e.target.value)}
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
+          >
+            <option value="">Selecione...</option>
+            {deliverySlots.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 

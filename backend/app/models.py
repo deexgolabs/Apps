@@ -169,6 +169,8 @@ class Order(Base):
     coupon_code = Column(String, nullable=True)
     fulfillment_type = Column(String, nullable=True, default="delivery")  # delivery | pickup | dine_in
     table_number = Column(String, nullable=True)  # só usado quando fulfillment_type == dine_in
+    pickup_point = Column(String, nullable=True)  # ponto de retirada escolhido, quando fulfillment_type == pickup
+    delivery_slot = Column(String, nullable=True)  # janela de horário escolhida (entrega ou retirada), texto livre
     payment_method = Column(String, nullable=True)
     payment_reference = Column(String, nullable=True)
     status = Column(String, default="pending")  # pending, confirmed, preparing, completed, cancelled

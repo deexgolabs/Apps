@@ -363,6 +363,8 @@ async def create_cart_checkout(
         coupon_code=coupon.code if coupon else None,
         fulfillment_type=payload.fulfillment_type,
         table_number=payload.table_number if payload.fulfillment_type == "dine_in" else None,
+        pickup_point=payload.pickup_point if payload.fulfillment_type == "pickup" else None,
+        delivery_slot=payload.delivery_slot,
         payment_method=payload.gateway,
         status="pending",
     )
@@ -678,7 +680,8 @@ async def export_orders_csv(
     writer = csv.writer(buffer)
     writer.writerow([
         "id", "modulo", "status", "criado_em", "itens", "subtotal", "frete",
-        "desconto", "total", "forma_entrega", "mesa", "cupom", "dados_cliente",
+        "desconto", "total", "forma_entrega", "mesa", "ponto_retirada", "horario_selecionado",
+        "cupom", "dados_cliente",
     ])
     for o in orders:
         items_summary = "; ".join(f"{oi.quantity}x {oi.name}" for oi in o.items)
@@ -694,6 +697,8 @@ async def export_orders_csv(
             o.amount if o.amount is not None else "",
             o.fulfillment_type or "",
             o.table_number or "",
+            o.pickup_point or "",
+            o.delivery_slot or "",
             o.coupon_code or "",
             "; ".join(f"{k}: {v}" for k, v in (o.data or {}).items()),
         ])

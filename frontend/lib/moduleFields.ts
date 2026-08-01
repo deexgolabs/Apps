@@ -99,6 +99,18 @@ export const MODULE_FIELDS: Record<string, ModuleField[]> = {
       placeholder: 'seg-sex:08:00-18:00\nsab:08:00-12:00',
     },
     { key: 'tempo_estimado_min', label: 'Tempo estimado de preparo (min, opcional)', type: 'text' },
+    {
+      key: 'pontos_retirada',
+      label: 'Pontos de retirada (Nome: Endereço, um por linha — opcional, deixe em branco pra retirada única)',
+      type: 'textarea',
+      placeholder: 'Loja Centro: Rua A, 123\nLoja Zona Sul: Av. B, 456',
+    },
+    {
+      key: 'janela_horarios',
+      label: 'Janelas de horário de entrega/retirada (abre-fecha, uma por linha — opcional, gera opções de hoje/amanhã)',
+      type: 'textarea',
+      placeholder: '11:00-12:00\n12:00-13:00\n18:00-19:00\n19:00-20:00',
+    },
   ],
   reserva_mesa: [
     {

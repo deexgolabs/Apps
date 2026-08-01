@@ -620,3 +620,44 @@ def test_unlocked_items_isolated_per_end_user(client, register_user, db_session)
 
     other_view = client.get(f"/api/apps/{app_id}/modules/conteudo_pago/unlocked-items", headers=other_headers)
     assert other_view.json() == []
+
+
+def test_cart_checkout_persists_pickup_point_and_delivery_slot(client, register_user, db_session):
+    app_id, owner_headers = _published_app(client, register_user, "pickupslot@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Bolo", price=20.0, stock=None)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "quantity": 1}],
+            "customer": {"nome": "Cliente"},
+            "fulfillment_type": "pickup",
+            "pickup_point": "Loja Centro: Rua A, 123",
+            "delivery_slot": "Hoje 18:00-19:00",
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["pickup_point"] == "Loja Centro: Rua A, 123"
+    assert body["delivery_slot"] == "Hoje 18:00-19:00"
+
+    order = db_session.query(Order).filter(Order.id == body["id"]).first()
+    assert order.pickup_point == "Loja Centro: Rua A, 123"
+    assert order.delivery_slot == "Hoje 18:00-19:00"
+
+
+def test_cart_checkout_ignores_pickup_point_when_not_pickup(client, register_user):
+    app_id, owner_headers = _published_app(client, register_user, "pickupignored@example.com")
+    item_id = _create_item(client, app_id, owner_headers, name="Bolo", price=20.0, stock=None)
+
+    response = client.post(
+        f"/api/apps/{app_id}/modules/cardapio/cart-checkout",
+        json={
+            "items": [{"item_id": item_id, "quantity": 1}],
+            "customer": {"nome": "Cliente"},
+            "fulfillment_type": "delivery",
+            "pickup_point": "Loja Centro: Rua A, 123",
+        },
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["pickup_point"] is None

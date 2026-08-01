@@ -462,6 +462,8 @@ class OrderResponse(BaseModel):
     coupon_code: Optional[str] = None
     fulfillment_type: Optional[str] = None
     table_number: Optional[str] = None
+    pickup_point: Optional[str] = None
+    delivery_slot: Optional[str] = None
     payment_method: Optional[str] = None
     payment_reference: Optional[str] = None
     status: str
@@ -490,6 +492,8 @@ class CartCheckoutRequest(BaseModel):
     cep: Optional[str] = None
     gateway: Optional[str] = None
     table_number: Optional[str] = None
+    pickup_point: Optional[str] = None
+    delivery_slot: Optional[str] = None
 
 
 class SalesReportProduct(BaseModel):
