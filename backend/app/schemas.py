@@ -231,6 +231,27 @@ class PushSendLogResponse(BaseModel):
         from_attributes = True
 
 
+class CampaignCreate(BaseModel):
+    channel: str  # "push" | "email"
+    segment: str  # "all" | "customers" | "non_customers"
+    title: str
+    body: str
+
+
+class CampaignResponse(BaseModel):
+    id: int
+    app_id: int
+    channel: str
+    segment: str
+    title: str
+    body: str
+    recipient_count: int
+    sent_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ===== APP SCHEMAS =====
 
 

@@ -25,6 +25,7 @@ import SalesReport from '@/components/SalesReport'
 import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
 import PushHistory from '@/components/PushHistory'
+import CampaignManager from '@/components/CampaignManager'
 import ImageUploadField from '@/components/ImageUploadField'
 import type { App, Module } from '@/types'
 import toast from 'react-hot-toast'
@@ -598,6 +599,8 @@ export default function AppEditorPage({ params }: PageProps) {
                 <PushComposer appId={id} />
                 <hr className="border-gray-200" />
                 <PushHistory appId={id} />
+                <hr className="border-gray-200" />
+                <CampaignManager appId={id} />
               </div>
             )}
 

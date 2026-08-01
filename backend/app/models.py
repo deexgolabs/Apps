@@ -320,6 +320,23 @@ class AppCollaborator(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class Campaign(Base):
+    """Histórico de campanhas segmentadas (push ou e-mail) mandadas pelo dono
+    pra um recorte de clientes -- ver app/campaigns.py pra resolução do
+    segmento. Envio de push aqui soma no mesmo contador mensal do plano que o
+    broadcast manual (PushSendLog); e-mail vai pra fila de background."""
+    __tablename__ = "campaigns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    channel = Column(String, nullable=False)  # "push" | "email"
+    segment = Column(String, nullable=False)  # "all" | "customers" | "non_customers"
+    title = Column(String, nullable=False)
+    body = Column(String, nullable=False)
+    recipient_count = Column(Integer, default=0)
+    sent_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class AbandonedCart(Base):
     """Snapshot do carrinho de um cliente logado, atualizado a cada mudança
     (ver PUT .../cart) -- se ficar velho sem virar Order, o worker de

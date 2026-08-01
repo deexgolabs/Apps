@@ -95,6 +95,49 @@ def send_push_now(app_id: int, end_user_id: int, title: str, body: str, db: Sess
         raise RuntimeError(f"Falha transitória ao enviar push pro end_user {end_user_id} no app {app_id}")
 
 
+def check_push_monthly_limit(db: Session, app_id: int, plan: str) -> None:
+    """Levanta 403 se o app já atingiu o limite de envios de push do mês pro
+    plano do dono -- compartilhado entre broadcast manual (/push/send) e
+    campanha segmentada (routes/campaigns.py), mesmo contador (PushSendLog)."""
+    limit = get_plan_limits(plan, db)["push_sends_per_month"]
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    sent_this_month = db.query(PushSendLog).filter(
+        PushSendLog.app_id == app_id, PushSendLog.sent_at >= month_start
+    ).count()
+    if sent_this_month >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Limite de {limit} envio(s) de push por mês atingido para o plano '{plan}'. Faça upgrade para enviar mais."
+        )
+
+
+def send_push_to_subscriptions(subscriptions: List[PushSubscription], title: str, body: str, db: Session) -> tuple[int, int]:
+    """Manda push pra uma lista já filtrada de assinaturas -- reaproveitado
+    pelo broadcast manual (todas as assinaturas do app) e pela campanha
+    segmentada (só as assinaturas do segmento escolhido)."""
+    sent, failed = 0, 0
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": sub.endpoint,
+                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
+                },
+                data=json.dumps({"title": title, "body": body}),
+                vapid_private_key=settings.vapid_private_key,
+                vapid_claims={"sub": settings.vapid_claims_email or "mailto:admin@example.com"},
+            )
+            sent += 1
+        except WebPushException as exc:
+            failed += 1
+            status_code = exc.response.status_code if exc.response is not None else None
+            if status_code == 410:
+                db.delete(sub)
+            else:
+                logger.warning("Falha ao enviar push para %s: %s", sub.endpoint, exc)
+    return sent, failed
+
+
 @router.post("/push/send")
 async def send_push(
     app_id: int,
@@ -107,39 +150,10 @@ async def send_push(
     if not settings.vapid_private_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Push notifications não configuradas nesta instância")
 
-    limit = get_plan_limits(current_user.plan, db)["push_sends_per_month"]
-    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    sent_this_month = db.query(PushSendLog).filter(
-        PushSendLog.app_id == app_id, PushSendLog.sent_at >= month_start
-    ).count()
-    if sent_this_month >= limit:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Limite de {limit} envio(s) de push por mês atingido para o plano '{current_user.plan}'. Faça upgrade para enviar mais."
-        )
+    check_push_monthly_limit(db, app_id, current_user.plan)
 
     subscriptions = db.query(PushSubscription).filter(PushSubscription.app_id == app_id).all()
-    sent, failed = 0, 0
-
-    for sub in subscriptions:
-        try:
-            webpush(
-                subscription_info={
-                    "endpoint": sub.endpoint,
-                    "keys": {"p256dh": sub.p256dh, "auth": sub.auth},
-                },
-                data=json.dumps({"title": payload.title, "body": payload.body}),
-                vapid_private_key=settings.vapid_private_key,
-                vapid_claims={"sub": settings.vapid_claims_email or "mailto:admin@example.com"},
-            )
-            sent += 1
-        except WebPushException as exc:
-            failed += 1
-            status_code = exc.response.status_code if exc.response is not None else None
-            if status_code == 410:
-                db.delete(sub)
-            else:
-                logger.warning("Falha ao enviar push para %s: %s", sub.endpoint, exc)
+    sent, failed = send_push_to_subscriptions(subscriptions, payload.title, payload.body, db)
 
     db.add(PushSendLog(app_id=app_id, title=payload.title, body=payload.body))
     db.commit()

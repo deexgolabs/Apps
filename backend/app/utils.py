@@ -161,6 +161,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         AbandonedCart,
         App,
         AppCollaborator,
+        Campaign,
         AppConfig,
         AppUser,
         AppVersion,
@@ -198,6 +199,7 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
     db.query(Coupon).filter(Coupon.app_id == app_id).delete(synchronize_session=False)
     db.query(TableReservation).filter(TableReservation.app_id == app_id).delete(synchronize_session=False)
     db.query(AbandonedCart).filter(AbandonedCart.app_id == app_id).delete(synchronize_session=False)
+    db.query(Campaign).filter(Campaign.app_id == app_id).delete(synchronize_session=False)
     db.query(WebhookSubscription).filter(WebhookSubscription.app_id == app_id).delete(synchronize_session=False)
     db.query(AppCollaborator).filter(AppCollaborator.app_id == app_id).delete(synchronize_session=False)
     db.query(LoyaltyAccount).filter(LoyaltyAccount.app_id == app_id).delete(synchronize_session=False)
