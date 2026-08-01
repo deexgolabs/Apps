@@ -6,7 +6,7 @@ from typing import List
 from app.access import get_app_for_read
 from app.config import settings
 from app.database import get_db
-from app.models import App, AppUser, ItemReview, LoyaltyAccount, ModuleItem, Order, PushSubscription, TableReservation, User, WishlistItem, utcnow
+from app.models import AbandonedCart, App, AppUser, ItemReview, LoyaltyAccount, ModuleItem, Order, PushSubscription, TableReservation, User, WishlistItem, utcnow
 from app.rate_limit import limiter
 from app.schemas import (
     EndUserCreate, EndUserDataExport, EndUserLogin, EndUserProfileUpdate, EndUserResponse, EndUserToken,
@@ -236,6 +236,9 @@ async def delete_my_account(
     ).delete(synchronize_session=False)
     db.query(LoyaltyAccount).filter(
         LoyaltyAccount.app_id == app_id, LoyaltyAccount.end_user_id == end_user.id
+    ).delete(synchronize_session=False)
+    db.query(AbandonedCart).filter(
+        AbandonedCart.app_id == app_id, AbandonedCart.end_user_id == end_user.id
     ).delete(synchronize_session=False)
 
     end_user.full_name = "Usuário removido"

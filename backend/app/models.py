@@ -320,6 +320,25 @@ class AppCollaborator(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class AbandonedCart(Base):
+    """Snapshot do carrinho de um cliente logado, atualizado a cada mudança
+    (ver PUT .../cart) -- se ficar velho sem virar Order, o worker de
+    background manda um e-mail de recuperação uma única vez (reminder_sent_at
+    controla isso). Só rastreia clientes logados (login_cadastro) porque
+    precisa do e-mail pra poder mandar o lembrete."""
+    __tablename__ = "abandoned_carts"
+    __table_args__ = (UniqueConstraint("app_id", "end_user_id", "module_name", name="uq_abandoned_carts_app_user_module"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=False)
+    module_name = Column(String, nullable=False)
+    items = Column(JSON, default=list)  # [{item_id, name, quantity, unit_price}]
+    subtotal = Column(Float, nullable=True)
+    updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class TableReservation(Base):
     """Reserva de mesa feita pelo cliente final via o módulo reserva_mesa --
     fluxo próprio (não é FormSubmission genérico) porque precisa de status

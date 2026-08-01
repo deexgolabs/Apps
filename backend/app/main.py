@@ -10,7 +10,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.rate_limit import limiter
-from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth, orders, item_variations, reviews, coupons, loyalty, wishlist, webhooks, custom_domain, import_url, audit_logs, collaborators, reservations
+from app.routes import auth, users, apps, modules, module_config, module_items, submissions, end_users, payments, public, admin, billing, push, uploads, mercado_livre, oauth, orders, item_variations, reviews, coupons, loyalty, wishlist, webhooks, custom_domain, import_url, audit_logs, collaborators, reservations, cart_tracking
 from app.seed import seed_modules, seed_plan_configs
 
 # Sem DSN (padrão), sentry_sdk.init vira um no-op — nada é enviado nem
@@ -73,6 +73,7 @@ app.include_router(import_url.router)
 app.include_router(audit_logs.router)
 app.include_router(collaborators.router)
 app.include_router(reservations.router)
+app.include_router(cart_tracking.router)
 
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -88,12 +89,14 @@ async def _background_job_worker() -> None:
     própria sessão de banco, isolada da requisição HTTP que a originou."""
     from app.database import SessionLocal
     from app.jobs import run_pending_jobs
+    from app.abandoned_cart import send_abandoned_cart_reminders
 
     while True:
         try:
             db = SessionLocal()
             try:
                 run_pending_jobs(db)
+                send_abandoned_cart_reminders(db)
             finally:
                 db.close()
         except Exception:

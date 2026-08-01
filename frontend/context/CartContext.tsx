@@ -1,8 +1,9 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import toast from 'react-hot-toast'
 import { publicApi } from '@/lib/api'
+import { endUserAuthHeader, endUserSessionKey } from '@/lib/endUserAuth'
 import type { ItemVariation, OrderItem } from '@/types'
 
 export interface CartItem {
@@ -67,6 +68,43 @@ export function CartProvider({ appId, children }: { appId: string; children: Rea
 
   useEffect(() => {
     localStorage.setItem(storageKey(appId), JSON.stringify(items))
+  }, [appId, items])
+
+  // Manda um snapshot do carrinho pro backend (debounced) só quando o cliente
+  // está logado (login_cadastro) -- é o único jeito de saber o e-mail dele pra
+  // mandar o lembrete de carrinho abandonado (ver app/abandoned_cart.py).
+  // Carrinho de visitante sem conta não é rastreado, propositalmente. Guarda o
+  // último módulo usado num ref pra conseguir "zerar" o rastreamento (items: [])
+  // quando o cliente esvazia o carrinho manualmente, não só no checkout (que já
+  // é tratado no servidor, em create_cart_checkout).
+  const lastTrackedModuleRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!localStorage.getItem(endUserSessionKey(appId))) return
+    const moduleName = items[0]?.module_name || lastTrackedModuleRef.current
+    if (!moduleName) return
+    lastTrackedModuleRef.current = items[0]?.module_name || null
+
+    const timeout = setTimeout(() => {
+      publicApi
+        .put(
+          `/api/apps/${appId}/modules/${moduleName}/cart`,
+          {
+            items: items.map((i) => ({
+              item_id: i.item_id,
+              name: i.name,
+              quantity: i.quantity,
+              unit_price: i.unit_price,
+            })),
+            subtotal: items.reduce((sum, i) => sum + i.unit_price * i.quantity, 0),
+          },
+          { headers: endUserAuthHeader(appId) }
+        )
+        .catch(() => {
+          // rastreamento de carrinho é best-effort -- nunca deve travar a UX de compra
+        })
+    }, 2000)
+    return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId, items])
 
   const addItem: CartContextValue['addItem'] = (moduleName, item) => {

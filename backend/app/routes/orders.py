@@ -14,7 +14,7 @@ from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
 from app.jobs import enqueue_job
 from app.webhook_dispatch import dispatch_webhook_event
-from app.models import App, AppConfig, AppUser, ItemVariation, LoyaltyAccount, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
+from app.models import AbandonedCart, App, AppConfig, AppUser, ItemVariation, LoyaltyAccount, Module, ModuleItem, Order, OrderItem, OrderStatusEvent, User
 from app.payment_gateways import (
     checkout_mercado_pago,
     checkout_pagseguro,
@@ -384,6 +384,14 @@ async def create_cart_checkout(
 
     db.commit()
     db.refresh(order)
+
+    if end_user:
+        db.query(AbandonedCart).filter(
+            AbandonedCart.app_id == app_id,
+            AbandonedCart.end_user_id == end_user.id,
+            AbandonedCart.module_name == module_name,
+        ).delete(synchronize_session=False)
+        db.commit()
 
     _notify_owner_new_order(app, order, db)
     dispatch_webhook_event(db, app_id, "order.created", _order_event_payload(order))

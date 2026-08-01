@@ -572,6 +572,18 @@ class WebhookSubscriptionResponse(BaseModel):
         from_attributes = True
 
 
+class CartTrackingItem(BaseModel):
+    item_id: int
+    name: str
+    quantity: int
+    unit_price: float
+
+
+class CartTrackingRequest(BaseModel):
+    items: List[CartTrackingItem] = []
+    subtotal: float = 0
+
+
 class ReservationCreate(BaseModel):
     customer_name: str
     customer_phone: str
