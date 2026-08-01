@@ -176,6 +176,51 @@ async def export_items_csv(
     )
 
 
+@router.get("/{app_id}/modules/{module_name}/items/export-bling.csv")
+async def export_items_bling_csv(
+    app_id: int,
+    module_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exporta o catálogo em CSV com colunas no formato de importação de
+    produtos do Bling/Tiny (ERPs de gestão bem comuns entre pequenos
+    lojistas) -- código/descrição/preço de venda/estoque/categoria, que é a
+    convenção usual desses sistemas pra importar catálogo em lote. Como não
+    temos acesso à API paga nem ao template de import de uma conta real,
+    os nomes/ordem exatos das colunas devem ser conferidos contra o template
+    de importação da conta do lojista antes de confiar cegamente nisso.
+    Precisa vir registrada antes de PUT/DELETE /items/{item_id} nesse arquivo,
+    senão o Starlette poderia casar 'export-bling.csv' com o path param item_id."""
+    get_app_for_read(app_id, db, current_user)
+    items = (
+        db.query(ModuleItem, ModuleCategory.name)
+        .outerjoin(ModuleCategory, ModuleItem.category_id == ModuleCategory.id)
+        .filter(ModuleItem.app_id == app_id, ModuleItem.module_name == module_name)
+        .order_by(ModuleItem.order)
+        .all()
+    )
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["codigo", "descricao", "preco_venda", "estoque", "categoria"])
+    for item, category_name in items:
+        writer.writerow([
+            item.id,
+            item.name,
+            f"{item.price:.2f}" if item.price is not None else "0.00",
+            item.stock if item.stock is not None else "",
+            category_name or "",
+        ])
+    buffer.seek(0)
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=catalogo_bling_{module_name}_app_{app_id}.csv"},
+    )
+
+
 @router.post("/{app_id}/modules/{module_name}/items/import.csv", response_model=ImportSummaryResponse)
 async def import_items_csv(
     app_id: int,

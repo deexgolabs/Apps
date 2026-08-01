@@ -246,6 +246,20 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
     }
   }
 
+  const handleExportBlingCsv = async () => {
+    try {
+      const response = await api.get(`${base}/items/export-bling.csv`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `catalogo_bling_${moduleName}.csv`
+      link.click()
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      toast.error('Erro ao exportar catálogo pro Bling/Tiny')
+    }
+  }
+
   const handleImportCsv = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -574,6 +588,14 @@ export default function ItemsManager({ appId, moduleName, supportsCategories }: 
                 className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50"
               >
                 ⬇ Exportar CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleExportBlingCsv}
+                className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50"
+                title="CSV no formato de importação de produtos do Bling/Tiny"
+              >
+                ⬇ Exportar pro Bling/Tiny
               </button>
               <label className="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 hover:bg-gray-50 cursor-pointer">
                 {importing ? 'Importando...' : '⬆ Importar CSV'}

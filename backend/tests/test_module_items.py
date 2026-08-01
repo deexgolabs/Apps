@@ -167,6 +167,51 @@ def test_export_items_csv_requires_owner(client, register_user):
     assert response.status_code == 404
 
 
+def test_export_items_bling_csv_returns_mapped_columns(client, register_user):
+    app_id, headers = _published_app(client, register_user, "exportbling@example.com")
+    category = client.post(
+        f"/api/apps/{app_id}/modules/catalogo/categories", json={"name": "Bebidas"}, headers=headers
+    )
+    category_id = category.json()["id"]
+    item = client.post(
+        f"/api/apps/{app_id}/modules/catalogo/items",
+        json={"name": "Refrigerante", "price": 6.0, "stock": 20, "category_id": category_id},
+        headers=headers,
+    )
+    item_id = item.json()["id"]
+
+    response = client.get(f"/api/apps/{app_id}/modules/catalogo/items/export-bling.csv", headers=headers)
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    body = response.text
+    assert "codigo,descricao,preco_venda,estoque,categoria" in body
+    assert f"{item_id},Refrigerante,6.00,20,Bebidas" in body
+
+
+def test_export_items_bling_csv_handles_missing_price_stock_category(client, register_user):
+    app_id, headers = _published_app(client, register_user, "exportblingblank@example.com")
+    item = client.post(
+        f"/api/apps/{app_id}/modules/catalogo/items",
+        json={"name": "Item sem preço"},
+        headers=headers,
+    )
+    item_id = item.json()["id"]
+
+    response = client.get(f"/api/apps/{app_id}/modules/catalogo/items/export-bling.csv", headers=headers)
+    assert response.status_code == 200
+    body = response.text
+    assert f"{item_id},Item sem preço,0.00,," in body
+
+
+def test_export_items_bling_csv_requires_owner(client, register_user):
+    app_id, headers = _published_app(client, register_user, "exportblingowner@example.com")
+    other = register_user(email="exportblingother@example.com")
+    other_headers = {"Authorization": f"Bearer {other['access_token']}"}
+
+    response = client.get(f"/api/apps/{app_id}/modules/catalogo/items/export-bling.csv", headers=other_headers)
+    assert response.status_code == 404
+
+
 def test_import_items_csv_creates_items_and_categories(client, register_user, db_session):
     app_id, headers = _published_app(client, register_user, "importcsv@example.com")
 
