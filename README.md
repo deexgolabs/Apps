@@ -134,9 +134,25 @@ Rotas públicas sensíveis a abuso (`login`/`register`/`forgot-password` do dono
 
 O SDK já está integrado (backend: `sentry_sdk.init` em `app/main.py`; frontend: `sentry.client/server/edge.config.ts` + `instrumentation.ts`), mas sem DSN configurado **nada é coletado nem enviado** — é código morto de propósito até você ativar:
 
-1. Crie um projeto em [sentry.io](https://sentry.io) (um projeto Python/FastAPI, um projeto Next.js).
-2. Cole os DSNs: `SENTRY_DSN` no `backend/.env`, `NEXT_PUBLIC_SENTRY_DSN` no `frontend/.env.local`.
-3. Pro lado do navegador (client-side), rode `npx @sentry/wizard@latest -i nextjs` dentro de `frontend/` com o DSN em mãos — a forma de inicializar no navegador varia entre versões do Next.js/Sentry, e o wizard detecta a certa pra versão instalada (o servidor/edge já funcionam sem isso, via `instrumentation.ts`).
+1. Crie um projeto em [sentry.io](https://sentry.io) (um projeto Python/FastAPI, um projeto Next.js) — o plano gratuito cobre uma instância pequena como essa sem custo.
+2. Copie o DSN de cada projeto (Settings → Client Keys (DSN) no painel do Sentry).
+3. **Em desenvolvimento local**: cole os DSNs em `SENTRY_DSN` no `backend/.env` e `NEXT_PUBLIC_SENTRY_DSN` no `frontend/.env.local`.
+4. **Em produção** (Render + Vercel, que é como este projeto está implantado hoje):
+   - No painel do Render, abra o serviço do backend → **Environment** → adicione a variável `SENTRY_DSN` com o DSN do projeto Python/FastAPI → salvar (o Render reimplanta sozinho).
+   - No painel da Vercel, abra o projeto do frontend → **Settings → Environment Variables** → adicione `NEXT_PUBLIC_SENTRY_DSN` com o DSN do projeto Next.js, marcando pelo menos o ambiente de Produção → um novo deploy (ou "Redeploy" manual) já sai com a variável aplicada.
+5. Pro lado do navegador (client-side), rode `npx @sentry/wizard@latest -i nextjs` dentro de `frontend/` com o DSN em mãos — a forma de inicializar no navegador varia entre versões do Next.js/Sentry, e o wizard detecta a certa pra versão instalada (o servidor/edge já funcionam sem isso, via `instrumentation.ts`).
+
+Depois de configurado, um jeito rápido de confirmar que está funcionando é forçar um erro de propósito (ex: acessar uma rota inexistente que gere uma exceção não tratada) e conferir se ele aparece no painel do Sentry em até um minuto.
+
+## Uptime (disponibilidade do backend)
+
+A rota pública `GET /health` (`backend/app/main.py`) já existe e responde `{"status": "ok"}` sem autenticação — serve como alvo pra qualquer serviço externo de uptime checar se o backend está de pé. Não há nenhum serviço de uptime configurado por padrão (isso exige uma conta externa, então fica a critério de cada implantação):
+
+1. Crie uma conta gratuita num serviço de uptime — [UptimeRobot](https://uptimerobot.com), [Better Uptime](https://betteruptime.com) e [Freshping](https://www.freshworks.com/website-monitoring/) têm planos free que bastam pra esse caso.
+2. Configure um monitor do tipo HTTP(S) apontando pra `https://<seu-backend-no-render>.onrender.com/health`, checando a cada 5 minutos (a maioria dos planos free tem esse intervalo mínimo).
+3. Configure o alerta (e-mail, SMS, Slack, etc. — depende do serviço) pra avisar quando o `/health` parar de responder `200`.
+
+Atenção: instâncias free do Render "dormem" depois de um período sem tráfego e demoram para acordar na primeira requisição seguinte — um monitor de uptime batendo a cada 5 minutos também tem o efeito colateral de manter a instância sempre acordada, o que é desejável aqui.
 
 ## Repositório remoto e CI
 
