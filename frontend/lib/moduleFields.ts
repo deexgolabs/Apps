@@ -100,6 +100,14 @@ export const MODULE_FIELDS: Record<string, ModuleField[]> = {
     },
     { key: 'tempo_estimado_min', label: 'Tempo estimado de preparo (min, opcional)', type: 'text' },
   ],
+  reserva_mesa: [
+    {
+      key: 'horario_funcionamento',
+      label: 'Horário de funcionamento (dia:abre-fecha, um por linha — opcional)',
+      type: 'textarea',
+      placeholder: 'seg-sex:08:00-18:00\nsab:08:00-12:00',
+    },
+  ],
 }
 
 // Módulos de pagamento que chamam uma gateway real via /checkout (não /submissions).

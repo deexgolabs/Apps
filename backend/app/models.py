@@ -318,6 +318,26 @@ class AppCollaborator(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class TableReservation(Base):
+    """Reserva de mesa feita pelo cliente final via o módulo reserva_mesa --
+    fluxo próprio (não é FormSubmission genérico) porque precisa de status
+    (pending/confirmed/cancelled/completed) igual a Order, mas sem carrinho
+    nem valor monetário associado."""
+    __tablename__ = "table_reservations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=True)
+    customer_name = Column(String, nullable=False)
+    customer_phone = Column(String, nullable=False)
+    party_size = Column(Integer, nullable=False)
+    reservation_at = Column(DateTime(timezone=True), nullable=False)
+    table_number = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending")  # pending | confirmed | cancelled | completed
+    notes = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class ModuleItem(Base):
     __tablename__ = "module_items"
 

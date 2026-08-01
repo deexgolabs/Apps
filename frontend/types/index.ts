@@ -142,6 +142,20 @@ export interface OrderStatusEvent {
   created_at: string
 }
 
+export interface Reservation {
+  id: number
+  app_id: number
+  end_user_id: number | null
+  customer_name: string
+  customer_phone: string
+  party_size: number
+  reservation_at: string
+  table_number: string | null
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
+  notes: string | null
+  created_at: string
+}
+
 export interface Order {
   id: number
   app_id: number

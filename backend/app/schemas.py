@@ -568,6 +568,37 @@ class WebhookSubscriptionResponse(BaseModel):
         from_attributes = True
 
 
+class ReservationCreate(BaseModel):
+    customer_name: str
+    customer_phone: str
+    party_size: int
+    reservation_at: datetime
+    notes: Optional[str] = None
+
+
+class ReservationUpdate(BaseModel):
+    status: Optional[str] = None
+    table_number: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ReservationResponse(BaseModel):
+    id: int
+    app_id: int
+    end_user_id: Optional[int]
+    customer_name: str
+    customer_phone: str
+    party_size: int
+    reservation_at: datetime
+    table_number: Optional[str]
+    status: str
+    notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class CouponValidateRequest(BaseModel):
     code: str
     subtotal: float
@@ -718,11 +749,12 @@ class WishlistItemResponse(BaseModel):
 
 class EndUserDataExport(BaseModel):
     """LGPD — tudo que identifica o cliente final numa loja: perfil, pedidos,
-    avaliações, lista de desejos e pontos de fidelidade."""
+    avaliações, lista de desejos, reservas de mesa e pontos de fidelidade."""
     profile: EndUserResponse
     orders: List[OrderResponse]
     reviews: List[ReviewResponse]
     wishlist: List[WishlistItemResponse]
+    reservations: List[ReservationResponse]
     loyalty_points: int
 
 

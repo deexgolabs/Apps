@@ -4,7 +4,7 @@ import {
   Building2, Phone, Truck, FileEdit, Camera, Receipt, Package, Lock, Star,
   CalendarDays, CreditCard, Banknote, Bell, ShoppingCart, Heart, Gift, Tag,
   Clock, User, Users, Settings, Home, Award, Zap, Wallet, Music, DollarSign,
-  UserPlus, Landmark, Ticket,
+  UserPlus, Landmark, Ticket, UtensilsCrossed,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -41,6 +41,7 @@ export const MODULE_VECTOR_ICONS: Record<string, LucideIcon> = {
   login_cadastro: Lock,
   cartao_fidelidade: Star,
   agenda_interna: CalendarDays,
+  reserva_mesa: UtensilsCrossed,
   mercado_pago: CreditCard,
   paypal: Wallet,
   pagseguro: Landmark,

@@ -962,6 +962,132 @@ function DynamicFormModuleContent({
   )
 }
 
+function TableReservationWidget({
+  appId,
+  moduleName,
+  settings,
+}: {
+  appId: string
+  moduleName: string
+  settings: Record<string, any> | undefined
+}) {
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [partySize, setPartySize] = useState('2')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [notes, setNotes] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  const horarioFuncionamento = settings?.horario_funcionamento
+
+  const missingRequired = !name.trim() || !phone.trim() || !date || !time || !partySize || Number(partySize) < 1
+
+  const handleSubmit = async () => {
+    setSending(true)
+    try {
+      const reservationAt = new Date(`${date}T${time}:00`).toISOString()
+      await publicApi.post(
+        `/api/apps/${appId}/modules/${moduleName}/reservations`,
+        {
+          customer_name: name,
+          customer_phone: phone,
+          party_size: Number(partySize),
+          reservation_at: reservationAt,
+          notes: notes.trim() || null,
+        },
+        { headers: endUserAuthHeader(appId) }
+      )
+      setSent(true)
+      setName('')
+      setPhone('')
+      setPartySize('2')
+      setDate('')
+      setTime('')
+      setNotes('')
+    } catch (error: any) {
+      showApiError(error, 'Erro ao reservar mesa')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="text-center mt-8">
+        <p className="text-sm text-gray-700 font-medium">Reserva enviada! Aguarde a confirmação.</p>
+        <button
+          type="button"
+          onClick={() => setSent(false)}
+          className="text-xs text-indigo-600 hover:text-indigo-700 mt-2"
+        >
+          Fazer outra reserva
+        </button>
+      </div>
+    )
+  }
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  return (
+    <div className="space-y-2">
+      <OperatingHoursBadge horarioFuncionamento={horarioFuncionamento} />
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Nome"
+        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+      />
+      <input
+        type="text"
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="Telefone"
+        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="date"
+          value={date}
+          min={todayStr}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+        />
+        <input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+        />
+      </div>
+      <input
+        type="number"
+        min={1}
+        value={partySize}
+        onChange={(e) => setPartySize(e.target.value)}
+        placeholder="Número de pessoas"
+        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+      />
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Observações (opcional)"
+        className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+      />
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={sending || missingRequired}
+        className="w-full bg-indigo-600 text-white py-1.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 transition"
+      >
+        {sending ? 'Reservando...' : 'Reservar mesa'}
+      </button>
+    </div>
+  )
+}
+
 function FreteCalculator({ settings }: { settings: Record<string, any> | undefined }) {
   const [cep, setCep] = useState('')
 
@@ -1908,6 +2034,12 @@ export default function AppRuntime({
               />
             ) : selectedModule === 'calculo_frete' ? (
               <FreteCalculator settings={configs[selectedModule]} />
+            ) : selectedModule === 'reserva_mesa' ? (
+              <TableReservationWidget
+                appId={appId}
+                moduleName={selectedModule}
+                settings={configs[selectedModule]}
+              />
             ) : selectedModule === 'login_cadastro' ? (
               <EndUserAuthWidget appId={appId} />
             ) : selectedModule === 'cartao_fidelidade' ? (

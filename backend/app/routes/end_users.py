@@ -6,11 +6,11 @@ from typing import List
 from app.access import get_app_for_read
 from app.config import settings
 from app.database import get_db
-from app.models import App, AppUser, ItemReview, LoyaltyAccount, ModuleItem, Order, PushSubscription, User, WishlistItem, utcnow
+from app.models import App, AppUser, ItemReview, LoyaltyAccount, ModuleItem, Order, PushSubscription, TableReservation, User, WishlistItem, utcnow
 from app.rate_limit import limiter
 from app.schemas import (
     EndUserCreate, EndUserDataExport, EndUserLogin, EndUserProfileUpdate, EndUserResponse, EndUserToken,
-    OrderResponse, ReviewResponse, WishlistItemResponse,
+    OrderResponse, ReservationResponse, ReviewResponse, WishlistItemResponse,
 )
 from app.utils import hash_password, verify_password, create_access_token
 from app.dependencies import get_current_user, get_current_end_user
@@ -191,10 +191,17 @@ async def export_my_data(
         .filter(LoyaltyAccount.app_id == app_id, LoyaltyAccount.end_user_id == end_user.id)
         .first()
     )
+    reservations = (
+        db.query(TableReservation)
+        .filter(TableReservation.app_id == app_id, TableReservation.end_user_id == end_user.id)
+        .order_by(TableReservation.reservation_at.desc())
+        .all()
+    )
 
     return EndUserDataExport(
         profile=EndUserResponse.model_validate(end_user),
         orders=[OrderResponse.model_validate(o) for o in orders],
+        reservations=[ReservationResponse.model_validate(r) for r in reservations],
         reviews=[
             ReviewResponse(
                 id=r.id,

@@ -291,6 +291,14 @@ SEED_MODULES = [
         "features": ["Título e mensagem da notificação", "Envio para todos os inscritos"],
     },
     {
+        "name": "reserva_mesa",
+        "description": "Reserva de mesa com data, horário e número de pessoas",
+        "category": "engagement",
+        "icon_url": None,
+        "requires_plan": "free",
+        "features": ["Reserva pelo cliente final", "Confirmação/recusa pelo dono", "Respeita horário de funcionamento"],
+    },
+    {
         "name": "mercado_livre",
         "description": "Produtos importados de uma conta do Mercado Livre",
         "category": "ecommerce",

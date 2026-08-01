@@ -20,6 +20,7 @@ import OrdersList from '@/components/OrdersList'
 import CouponsManager from '@/components/CouponsManager'
 import WebhooksManager from '@/components/WebhooksManager'
 import TeamManager from '@/components/TeamManager'
+import ReservationsManager from '@/components/ReservationsManager'
 import SalesReport from '@/components/SalesReport'
 import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
@@ -40,7 +41,7 @@ const FONT_OPTIONS = [
   { value: "'Trebuchet MS', sans-serif", label: 'Trebuchet MS' },
 ]
 
-type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'relatorios' | 'notificacoes' | 'publicar' | 'equipe'
+type Tab = 'geral' | 'marca' | 'modulos' | 'pedidos' | 'reservas' | 'relatorios' | 'notificacoes' | 'publicar' | 'equipe'
 
 const TOUR_STEPS = [
   {
@@ -283,9 +284,12 @@ export default function AppEditorPage({ params }: PageProps) {
   const isOwner = app?.my_role === 'owner'
   const isViewer = app?.my_role === 'viewer'
 
-  const TABS: { id: Tab; label: string }[] = activeModules.includes('push_notifications')
-    ? [...BASE_TABS.slice(0, 4), { id: 'notificacoes', label: 'Notificações' }, ...BASE_TABS.slice(4)]
-    : BASE_TABS
+  const TABS: { id: Tab; label: string }[] = [
+    ...BASE_TABS.slice(0, 4),
+    ...(activeModules.includes('reserva_mesa') ? [{ id: 'reservas' as Tab, label: 'Reservas' }] : []),
+    ...(activeModules.includes('push_notifications') ? [{ id: 'notificacoes' as Tab, label: 'Notificações' }] : []),
+    ...BASE_TABS.slice(4),
+  ]
   const VISIBLE_TABS = isOwner ? [...TABS, { id: 'equipe' as Tab, label: 'Equipe' }] : TABS
 
   const checklistItems = [
@@ -584,6 +588,8 @@ export default function AppEditorPage({ params }: PageProps) {
                 <OrdersList appId={id} appName={name} />
               </div>
             )}
+
+            {activeTab === 'reservas' && <ReservationsManager appId={id} moduleName="reserva_mesa" />}
 
             {activeTab === 'relatorios' && <SalesReport appId={id} />}
 
