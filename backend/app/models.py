@@ -279,6 +279,20 @@ class AutoCouponIssuance(Base):
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 
+class PageView(Base):
+    """Visita anônima num app publicado -- visitor_hash é gerado no cliente
+    (localStorage, sem nenhum dado pessoal/IP), só serve pra contar visitantes
+    únicos. Usado pelo painel de analytics do dono (rota pública de tracking,
+    resumo agregado só pra quem tem acesso ao app)."""
+    __tablename__ = "page_views"
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False, index=True)
+    module_name = Column(String, nullable=True)
+    visitor_hash = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
 class AdminAuditLog(Base):
     __tablename__ = "admin_audit_logs"
 

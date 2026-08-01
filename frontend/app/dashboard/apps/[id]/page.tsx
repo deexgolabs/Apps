@@ -23,6 +23,7 @@ import WebhooksManager from '@/components/WebhooksManager'
 import TeamManager from '@/components/TeamManager'
 import ReservationsManager from '@/components/ReservationsManager'
 import SalesReport from '@/components/SalesReport'
+import AnalyticsPanel from '@/components/AnalyticsPanel'
 import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
 import PushHistory from '@/components/PushHistory'
@@ -594,7 +595,13 @@ export default function AppEditorPage({ params }: PageProps) {
 
             {activeTab === 'reservas' && <ReservationsManager appId={id} moduleName="reserva_mesa" />}
 
-            {activeTab === 'relatorios' && <SalesReport appId={id} />}
+            {activeTab === 'relatorios' && (
+              <div className="space-y-6">
+                <SalesReport appId={id} />
+                <hr className="border-gray-200" />
+                <AnalyticsPanel appId={id} />
+              </div>
+            )}
 
             {activeTab === 'notificacoes' && (
               <div className="space-y-6">

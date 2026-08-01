@@ -18,6 +18,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import api, { publicApi } from '@/lib/api'
+import { getOrCreateVisitorHash } from '@/lib/analytics'
 import Skeleton from '@/components/Skeleton'
 import {
   CART_ENABLED_MODULES,
@@ -1974,6 +1975,20 @@ export default function AppRuntime({
   useEffect(() => {
     setShowIconGridHome(homeScreenStyle === 'icon_grid')
   }, [homeScreenStyle])
+
+  useEffect(() => {
+    if (mode !== 'public' || !selectedModule) return
+    const visitorHash = getOrCreateVisitorHash(appId)
+    if (!visitorHash) return
+    try {
+      Promise.resolve(
+        publicApi.post(`/api/apps/${appId}/analytics/pageview`, { module_name: selectedModule, visitor_hash: visitorHash })
+      ).catch(() => {})
+    } catch {
+      // best-effort: tracking nunca deve quebrar o app
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, appId, selectedModule])
 
   const moduleByName = new Map(modules.map((m) => [m.name, m]))
   const isHomeScreen = selectedModule === (homeModule || activeModules[0])

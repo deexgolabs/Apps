@@ -595,6 +595,22 @@ class AutoCouponRuleResponse(BaseModel):
         from_attributes = True
 
 
+class PageViewCreate(BaseModel):
+    module_name: Optional[str] = None
+    visitor_hash: str
+
+
+class AnalyticsSummaryModule(BaseModel):
+    module_name: str
+    views: int
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    total_views: int
+    unique_visitors: int
+    top_modules: List[AnalyticsSummaryModule]
+
+
 class WebhookSubscriptionCreate(BaseModel):
     url: str
     event: str  # "order.created" | "order.status_changed" | "*"
