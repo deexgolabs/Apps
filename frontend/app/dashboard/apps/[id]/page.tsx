@@ -24,6 +24,7 @@ import TeamManager from '@/components/TeamManager'
 import ReservationsManager from '@/components/ReservationsManager'
 import SalesReport from '@/components/SalesReport'
 import AnalyticsPanel from '@/components/AnalyticsPanel'
+import RfmPanel from '@/components/RfmPanel'
 import OpenTablesPanel from '@/components/OpenTablesPanel'
 import PushComposer from '@/components/PushComposer'
 import PushHistory from '@/components/PushHistory'
@@ -600,6 +601,8 @@ export default function AppEditorPage({ params }: PageProps) {
                 <SalesReport appId={id} />
                 <hr className="border-gray-200" />
                 <AnalyticsPanel appId={id} />
+                <hr className="border-gray-200" />
+                <RfmPanel appId={id} />
               </div>
             )}
 

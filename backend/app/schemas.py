@@ -611,6 +611,21 @@ class AnalyticsSummaryResponse(BaseModel):
     top_modules: List[AnalyticsSummaryModule]
 
 
+class RfmCustomerResponse(BaseModel):
+    end_user_id: int
+    end_user_name: str
+    end_user_email: str
+    recency_days: int
+    frequency: int
+    monetary: float
+    tier: str
+
+
+class RfmSummaryResponse(BaseModel):
+    customers: List[RfmCustomerResponse]
+    tier_counts: dict
+
+
 class WebhookSubscriptionCreate(BaseModel):
     url: str
     event: str  # "order.created" | "order.status_changed" | "*"
