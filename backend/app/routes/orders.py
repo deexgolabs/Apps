@@ -29,6 +29,8 @@ from app.routes.coupons import validate_coupon
 from app.schemas import (
     CartCheckoutRequest,
     CloseTableRequest,
+    FinancialBreakdownItem,
+    FinancialReportResponse,
     OrderCreate,
     OrderResponse,
     OrderUpdate,
@@ -675,6 +677,97 @@ async def get_sales_report(
         top_products = [SalesReportProduct(name=r.name, quantity=r.quantity, revenue=r.revenue) for r in rows]
 
     return SalesReportResponse(revenue=revenue, orders_by_status=orders_by_status, top_products=top_products)
+
+
+def _compute_financial_report(db: Session, app_id: int, days: Optional[int]) -> FinancialReportResponse:
+    """Vai além do relatório de vendas: frete e desconto total, valor perdido
+    em cancelamentos, e receita quebrada por forma de entrega e de pagamento."""
+    query = db.query(Order).filter(Order.app_id == app_id)
+    if days:
+        query = query.filter(Order.created_at >= datetime.now(timezone.utc) - timedelta(days=days))
+    orders = query.all()
+
+    completed = [o for o in orders if o.status == "completed"]
+    cancelled = [o for o in orders if o.status == "cancelled"]
+
+    fulfillment_breakdown: dict = {}
+    payment_breakdown: dict = {}
+    for o in completed:
+        f_key = o.fulfillment_type or "delivery"
+        f_entry = fulfillment_breakdown.setdefault(f_key, {"count": 0, "revenue": 0.0})
+        f_entry["count"] += 1
+        f_entry["revenue"] += o.amount or 0
+
+        p_key = o.payment_method or "pagamento_na_entrega"
+        p_entry = payment_breakdown.setdefault(p_key, {"count": 0, "revenue": 0.0})
+        p_entry["count"] += 1
+        p_entry["revenue"] += o.amount or 0
+
+    return FinancialReportResponse(
+        total_revenue=sum(o.amount or 0 for o in completed),
+        total_delivery_fees=sum(o.delivery_fee or 0 for o in completed),
+        total_discounts=sum(o.discount_amount or 0 for o in completed),
+        cancelled_count=len(cancelled),
+        cancelled_value=sum(o.amount or 0 for o in cancelled),
+        by_fulfillment_type=[
+            FinancialBreakdownItem(key=k, count=v["count"], revenue=v["revenue"])
+            for k, v in sorted(fulfillment_breakdown.items())
+        ],
+        by_payment_method=[
+            FinancialBreakdownItem(key=k, count=v["count"], revenue=v["revenue"])
+            for k, v in sorted(payment_breakdown.items())
+        ],
+    )
+
+
+@router.get("/orders/financial-report", response_model=FinancialReportResponse)
+async def get_financial_report(
+    app_id: int,
+    days: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Relatório financeiro mais completo que o de vendas -- só quem tem
+    acesso ao app pode ver."""
+    get_app_for_read(app_id, db, current_user)
+    return _compute_financial_report(db, app_id, days)
+
+
+@router.get("/orders/financial-export.csv")
+async def export_financial_report_csv(
+    app_id: int,
+    days: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Exporta o relatório financeiro consolidado em CSV. Só quem tem
+    acesso ao app pode exportar."""
+    get_app_for_read(app_id, db, current_user)
+    report = _compute_financial_report(db, app_id, days)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["metrica", "valor"])
+    writer.writerow(["receita_total", report.total_revenue])
+    writer.writerow(["frete_total", report.total_delivery_fees])
+    writer.writerow(["desconto_total", report.total_discounts])
+    writer.writerow(["pedidos_cancelados", report.cancelled_count])
+    writer.writerow(["valor_cancelado", report.cancelled_value])
+    writer.writerow([])
+    writer.writerow(["forma_entrega", "pedidos", "receita"])
+    for item in report.by_fulfillment_type:
+        writer.writerow([item.key, item.count, item.revenue])
+    writer.writerow([])
+    writer.writerow(["forma_pagamento", "pedidos", "receita"])
+    for item in report.by_payment_method:
+        writer.writerow([item.key, item.count, item.revenue])
+    buffer.seek(0)
+
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=financeiro_app_{app_id}.csv"},
+    )
 
 
 @router.get("/orders/export.csv")

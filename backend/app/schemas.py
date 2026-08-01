@@ -533,6 +533,22 @@ class SalesReportResponse(BaseModel):
     top_products: List[SalesReportProduct]
 
 
+class FinancialBreakdownItem(BaseModel):
+    key: str
+    count: int
+    revenue: float
+
+
+class FinancialReportResponse(BaseModel):
+    total_revenue: float
+    total_delivery_fees: float
+    total_discounts: float
+    cancelled_count: int
+    cancelled_value: float
+    by_fulfillment_type: List[FinancialBreakdownItem]
+    by_payment_method: List[FinancialBreakdownItem]
+
+
 class CloseTableRequest(BaseModel):
     table_number: str
 
