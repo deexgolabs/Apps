@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
+from typing import Optional
+
 from app.access import get_app_for_read, get_app_for_write
 from app.database import get_db
-from app.models import App, Coupon, User
+from app.models import App, AppUser, Coupon, User
 from app.schemas import (
     CouponCreate,
     CouponResponse,
@@ -14,7 +16,7 @@ from app.schemas import (
     CouponValidateRequest,
     CouponValidateResponse,
 )
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_optional_end_user
 from app.plan_limits import get_plan_limits
 from app.public_utils import get_published_app
 
@@ -98,7 +100,7 @@ async def delete_coupon(
     return None
 
 
-def validate_coupon(app_id: int, code: str, subtotal: float, db: Session) -> tuple:
+def validate_coupon(app_id: int, code: str, subtotal: float, db: Session, end_user_id: Optional[int] = None) -> tuple:
     """Retorna (coupon | None, discount_amount, reason | None) — reaproveitado
     pelo checkout de carrinho e pelo endpoint público de validação."""
     coupon = db.query(Coupon).filter(Coupon.app_id == app_id, Coupon.code == code.strip().upper()).first()
@@ -112,6 +114,8 @@ def validate_coupon(app_id: int, code: str, subtotal: float, db: Session) -> tup
         return None, 0.0, "Cupom esgotado"
     if coupon.min_order_value is not None and subtotal < coupon.min_order_value:
         return None, 0.0, f"Pedido mínimo de R$ {coupon.min_order_value:.2f} para esse cupom"
+    if coupon.end_user_id is not None and coupon.end_user_id != end_user_id:
+        return None, 0.0, "Cupom pessoal, não pode ser usado por essa conta"
 
     if coupon.discount_type == "percent":
         discount = subtotal * (coupon.discount_value / 100)
@@ -122,9 +126,16 @@ def validate_coupon(app_id: int, code: str, subtotal: float, db: Session) -> tup
 
 
 @router.post("/public/coupons/validate", response_model=CouponValidateResponse)
-async def validate_coupon_public(app_id: int, payload: CouponValidateRequest, db: Session = Depends(get_db)):
+async def validate_coupon_public(
+    app_id: int,
+    payload: CouponValidateRequest,
+    db: Session = Depends(get_db),
+    end_user: Optional[AppUser] = Depends(get_optional_end_user),
+):
     get_published_app(app_id, db)
-    coupon, discount, reason = validate_coupon(app_id, payload.code, payload.subtotal, db)
+    coupon, discount, reason = validate_coupon(
+        app_id, payload.code, payload.subtotal, db, end_user_id=end_user.id if end_user else None
+    )
     if not coupon:
         return CouponValidateResponse(valid=False, reason=reason)
     return CouponValidateResponse(valid=True, discount_amount=discount)

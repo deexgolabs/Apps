@@ -161,6 +161,8 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
         AbandonedCart,
         App,
         AppCollaborator,
+        AutoCouponIssuance,
+        AutoCouponRule,
         Campaign,
         AppConfig,
         AppUser,
@@ -196,6 +198,8 @@ def delete_app_cascade(db: Session, app_id: int) -> None:
     db.query(FormSubmission).filter(FormSubmission.app_id == app_id).delete(synchronize_session=False)
     db.query(PushSendLog).filter(PushSendLog.app_id == app_id).delete(synchronize_session=False)
     db.query(PushSubscription).filter(PushSubscription.app_id == app_id).delete(synchronize_session=False)
+    db.query(AutoCouponIssuance).filter(AutoCouponIssuance.app_id == app_id).delete(synchronize_session=False)
+    db.query(AutoCouponRule).filter(AutoCouponRule.app_id == app_id).delete(synchronize_session=False)
     db.query(Coupon).filter(Coupon.app_id == app_id).delete(synchronize_session=False)
     db.query(TableReservation).filter(TableReservation.app_id == app_id).delete(synchronize_session=False)
     db.query(AbandonedCart).filter(AbandonedCart.app_id == app_id).delete(synchronize_session=False)

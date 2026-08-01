@@ -88,10 +88,11 @@ export default function CheckoutForm({
     }
     setValidatingCoupon(true)
     try {
-      const res = await publicApi.post(`/api/apps/${appId}/public/coupons/validate`, {
-        code: couponInput,
-        subtotal: cart.subtotal,
-      })
+      const res = await publicApi.post(
+        `/api/apps/${appId}/public/coupons/validate`,
+        { code: couponInput, subtotal: cart.subtotal },
+        { headers: endUserAuthHeader(appId) }
+      )
       if (res.data.valid) {
         setCouponDiscount(res.data.discount_amount)
         setCouponError(null)

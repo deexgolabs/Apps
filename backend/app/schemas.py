@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List
 
 # ===== USER SCHEMAS =====
@@ -382,6 +382,7 @@ class EndUserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: str
+    referral_code: Optional[str] = None  # código de quem indicou, se veio de um link de indicação
 
 
 class EndUserLogin(BaseModel):
@@ -396,6 +397,8 @@ class EndUserResponse(BaseModel):
     full_name: str
     phone: Optional[str] = None
     address: Optional[str] = None
+    birth_date: Optional[date] = None
+    referral_code: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -412,6 +415,7 @@ class EndUserProfileUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
+    birth_date: Optional[date] = None
     current_password: Optional[str] = None
     new_password: Optional[str] = None
 
@@ -563,6 +567,28 @@ class CouponResponse(BaseModel):
     uses_count: int
     active: bool
     expires_at: Optional[datetime] = None
+    end_user_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AutoCouponRuleUpdate(BaseModel):
+    discount_type: str = "percent"  # percent | fixed
+    discount_value: float
+    valid_days: int = 30
+    active: bool = True
+
+
+class AutoCouponRuleResponse(BaseModel):
+    id: int
+    app_id: int
+    trigger: str
+    discount_type: str
+    discount_value: float
+    valid_days: int
+    active: bool
     created_at: datetime
 
     class Config:

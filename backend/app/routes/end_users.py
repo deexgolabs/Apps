@@ -51,6 +51,8 @@ def get_or_create_facebook_end_user(
         facebook_id=facebook_id,
     )
     db.add(end_user)
+    db.flush()
+    end_user.referral_code = f"AMIGO{end_user.id}"
     db.commit()
     db.refresh(end_user)
     return end_user
@@ -75,6 +77,18 @@ async def register_end_user(request: Request, app_id: int, user_data: EndUserCre
         password_hash=hash_password(user_data.password),
     )
     db.add(end_user)
+    db.flush()  # pega o id do end_user sem fechar a transação, pra gerar o próprio código de indicação
+    end_user.referral_code = f"AMIGO{end_user.id}"
+
+    if user_data.referral_code:
+        referrer = (
+            db.query(AppUser)
+            .filter(AppUser.app_id == app_id, AppUser.referral_code == user_data.referral_code.strip().upper())
+            .first()
+        )
+        if referrer:
+            end_user.referred_by_id = referrer.id
+
     db.commit()
     db.refresh(end_user)
 
@@ -148,6 +162,8 @@ async def update_current_end_user_profile(
         end_user.phone = payload.phone
     if payload.address is not None:
         end_user.address = payload.address
+    if payload.birth_date is not None:
+        end_user.birth_date = payload.birth_date
 
     if payload.new_password:
         if not end_user.password_hash or not payload.current_password or not verify_password(

@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.access import get_app_for_read, get_app_for_write
+from app.auto_coupons import check_and_issue_purchase_coupons
 from app.constants import ORDER_STATUS_LABELS
 from app.database import get_db
 from app.dependencies import get_current_end_user, get_current_user, get_optional_end_user
@@ -345,7 +346,9 @@ async def create_cart_checkout(
     coupon = None
     coupon_code = payload.coupon_code.strip().upper() if payload.coupon_code else None
     if coupon_code:
-        coupon, discount_amount, reason = validate_coupon(app_id, coupon_code, subtotal, db)
+        coupon, discount_amount, reason = validate_coupon(
+            app_id, coupon_code, subtotal, db, end_user_id=end_user.id if end_user else None
+        )
         if not coupon:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=reason or "Cupom inválido")
 
@@ -510,6 +513,7 @@ async def close_table(
     for order in orders:
         db.refresh(order)
         _credit_loyalty_points(app_id, order, db)
+        check_and_issue_purchase_coupons(db, app_id, order)
         _notify_customer_status_change(app, order, db)
         dispatch_webhook_event(db, app_id, "order.status_changed", _order_event_payload(order))
 
@@ -540,6 +544,7 @@ async def update_order(
 
     if order.status == "completed" and old_status != "completed":
         _credit_loyalty_points(app_id, order, db)
+        check_and_issue_purchase_coupons(db, app_id, order)
 
     if order.status != old_status:
         log_owner_action(

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, ForeignKey, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Date, JSON, Boolean, ForeignKey, Float, UniqueConstraint
 from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime, timezone
 
@@ -113,6 +113,9 @@ class AppUser(Base):
     facebook_id = Column(String, nullable=True)
     phone = Column(String, nullable=True)
     address = Column(String, nullable=True)  # endereço padrão, pra pré-preencher o checkout
+    birth_date = Column(Date, nullable=True)
+    referral_code = Column(String, nullable=True)  # gerado no cadastro, pra indicar amigos
+    referred_by_id = Column(Integer, ForeignKey("app_users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -239,6 +242,39 @@ class Coupon(Base):
     uses_count = Column(Integer, nullable=False, default=0)
     active = Column(Boolean, default=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=True)  # não-nulo = cupom pessoal auto-gerado
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class AutoCouponRule(Base):
+    __tablename__ = "auto_coupon_rules"
+    __table_args__ = (UniqueConstraint("app_id", "trigger", name="uq_auto_coupon_rules_app_id_trigger"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    trigger = Column(String, nullable=False)  # birthday | first_purchase | referral
+    discount_type = Column(String, nullable=False, default="percent")  # percent | fixed
+    discount_value = Column(Float, nullable=False)
+    valid_days = Column(Integer, nullable=False, default=30)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), default=utcnow)
+
+
+class AutoCouponIssuance(Base):
+    """Registra cada cupom automático já emitido, pra nunca emitir duas vezes
+    pro mesmo (cliente, gatilho, período) -- período é o ano pro aniversário,
+    "once" pra primeira compra, e o id do amigo indicado pra indicação."""
+    __tablename__ = "auto_coupon_issuances"
+    __table_args__ = (
+        UniqueConstraint("app_id", "end_user_id", "trigger", "period_key", name="uq_auto_coupon_issuance"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(Integer, ForeignKey("apps.id"), nullable=False)
+    end_user_id = Column(Integer, ForeignKey("app_users.id"), nullable=False)
+    trigger = Column(String, nullable=False)
+    period_key = Column(String, nullable=False)
+    coupon_id = Column(Integer, ForeignKey("coupons.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 

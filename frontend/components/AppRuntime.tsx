@@ -1276,6 +1276,8 @@ interface LoggedInEndUser {
   email?: string
   phone?: string | null
   address?: string | null
+  birth_date?: string | null
+  referral_code?: string | null
 }
 
 function EndUserAuthWidget({ appId }: { appId: string }) {
@@ -1290,6 +1292,8 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
   const [profileFullName, setProfileFullName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
   const [profileAddress, setProfileAddress] = useState('')
+  const [profileBirthDate, setProfileBirthDate] = useState('')
+  const [referralCodeFromUrl, setReferralCodeFromUrl] = useState('')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [savingProfile, setSavingProfile] = useState(false)
@@ -1301,6 +1305,8 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const fbToken = params.get('fb_token')
+    const ref = params.get('ref')
+    if (ref) setReferralCodeFromUrl(ref)
 
     if (fbToken) {
       publicApi
@@ -1340,7 +1346,9 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
     try {
       const path = mode === 'register' ? 'register' : 'login'
       const payload =
-        mode === 'register' ? { email, password, full_name: fullName } : { email, password }
+        mode === 'register'
+          ? { email, password, full_name: fullName, ...(referralCodeFromUrl ? { referral_code: referralCodeFromUrl } : {}) }
+          : { email, password }
       const response = await publicApi.post(`/api/apps/${appId}/end-users/${path}`, payload)
       localStorage.setItem(
         endUserSessionKey(appId),
@@ -1379,6 +1387,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
           full_name: profileFullName,
           phone: profilePhone,
           address: profileAddress,
+          birth_date: profileBirthDate || null,
           ...(newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
         },
         { headers: { Authorization: `Bearer ${endUserToken}` } }
@@ -1447,6 +1456,7 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
               setProfileFullName(loggedInUser.full_name || '')
               setProfilePhone(loggedInUser.phone || '')
               setProfileAddress(loggedInUser.address || '')
+              setProfileBirthDate(loggedInUser.birth_date || '')
               setEditingProfile((v) => !v)
             }}
             className="text-xs text-indigo-600 hover:text-indigo-700"
@@ -1493,6 +1503,15 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
               rows={2}
               className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
             />
+            <label className="block text-xs text-gray-500">
+              Data de nascimento (ganhe um cupom de aniversário 🎂)
+              <input
+                type="date"
+                value={profileBirthDate}
+                onChange={(e) => setProfileBirthDate(e.target.value)}
+                className="w-full mt-0.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              />
+            </label>
             <p className="text-[11px] text-gray-400 pt-1">Trocar senha (opcional)</p>
             <input
               type="password"
@@ -1516,6 +1535,28 @@ function EndUserAuthWidget({ appId }: { appId: string }) {
             >
               {savingProfile ? 'Salvando...' : 'Salvar perfil'}
             </button>
+          </div>
+        )}
+
+        {loggedInUser.referral_code && (
+          <div className="text-left border border-dashed border-indigo-200 rounded-lg p-3 text-xs text-gray-600 space-y-1">
+            <p>🤝 Indique um amigo e ganhe cupom quando ele comprar pela primeira vez!</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-gray-50 px-2 py-1 rounded truncate">
+                {typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}?ref=${loggedInUser.referral_code}` : ''}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  const link = `${window.location.origin}${window.location.pathname}?ref=${loggedInUser.referral_code}`
+                  navigator.clipboard.writeText(link)
+                  toast.success('Link copiado!')
+                }}
+                className="text-indigo-600 hover:text-indigo-700 font-medium flex-shrink-0"
+              >
+                Copiar
+              </button>
+            </div>
           </div>
         )}
 
